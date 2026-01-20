@@ -147,7 +147,7 @@ select:focus {
 .multi-select-toggle {
   appearance: none;
   width: 100%;
-  min-width: 200px;
+  min-width: 160px;
   padding: 8px 24px 8px 0;
   font-family: inherit;
   font-size: 0.9rem;
@@ -169,7 +169,7 @@ select:focus {
   top: calc(100% + 1px);
   left: 0;
   width: 100%;
-  min-width: 250px;
+  min-width: 200px;
   max-height: 250px;
   overflow-y: auto;
   background: #f8f7f4;
