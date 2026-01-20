@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>movement manual</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>movement manual</h1>
+      <p class="subtitle">pilates exercise repository</p>
+    </header>
+
+    <div class="controls-row">
+      <div class="filters">
+        <div class="filter-group">
+          <label>search</label>
+          <div class="autocomplete-wrapper">
+            <input type="text" id="exercise-search" placeholder="type to search..." autocomplete="off">
+            <div id="search-dropdown" class="autocomplete-dropdown hidden"></div>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label>goals</label>
+          <select id="filter-goals">
+            <option value="">all goals</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>muscle group</label>
+          <select id="filter-muscles">
+            <option value="">all muscle groups</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>starting position</label>
+          <select id="filter-position">
+            <option value="">all positions</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>exclude contraindications</label>
+          <div class="multi-select-wrapper">
+            <button type="button" id="contra-toggle" class="multi-select-toggle">
+              <span id="contra-label">none selected</span>
+            </button>
+            <div id="contra-dropdown" class="multi-select-dropdown hidden">
+              <div id="contra-options"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="view-toggle">
+        <label>view</label>
+        <div class="toggle-group">
+          <button type="button" class="toggle-btn active" data-view="grid">grid</button>
+          <button type="button" class="toggle-btn" data-view="list">list</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="browse-count" class="result-count"></div>
+    <div id="list-header" class="list-header hidden">
+      <span class="list-header-name">exercise</span>
+      <span class="list-header-goals">goals</span>
+    </div>
+    <div id="browse-grid" class="exercise-grid"></div>
+
+    <!-- Shared: Exercise Modal/Detail View for Browse mode -->
+    <div id="exercise-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <button class="modal-close">&times;</button>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>made by <a href="https://bensonperry.com">benson</a></footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
