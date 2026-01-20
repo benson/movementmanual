@@ -471,6 +471,214 @@ function hideModal() {
   document.body.style.overflow = '';
 }
 
+// ============ Mobile Sticky Bar ============
+
+function setupMobileSticky() {
+  const sticky = document.getElementById('mobile-sticky');
+  const filterToggle = document.getElementById('mobile-filter-toggle');
+  const filtersExpanded = document.getElementById('mobile-filters-expanded');
+  const mobileSearchInput = document.getElementById('mobile-search-input');
+  const mainSearchInput = document.getElementById('exercise-search');
+  const filterCountSpan = document.getElementById('mobile-filter-count');
+  const controlsRow = document.querySelector('.controls-row');
+
+  let stickyThreshold = 0;
+  let filtersOpen = false;
+
+  // Calculate threshold after page load
+  function updateThreshold() {
+    const header = document.querySelector('header');
+    stickyThreshold = header.offsetTop + header.offsetHeight + 20;
+  }
+
+  // Clone filters into mobile expanded area
+  function populateMobileFilters() {
+    const filters = document.querySelector('.filters');
+    const viewToggle = document.querySelector('.view-toggle');
+
+    // Clone the filter groups
+    filtersExpanded.innerHTML = '';
+    filters.querySelectorAll('.filter-group').forEach(group => {
+      // Skip search in mobile filters (it's always visible)
+      if (group.querySelector('#exercise-search')) return;
+
+      const clone = group.cloneNode(true);
+      // Update IDs to avoid conflicts
+      clone.querySelectorAll('[id]').forEach(el => {
+        el.id = 'mobile-' + el.id;
+      });
+      filtersExpanded.appendChild(clone);
+    });
+
+    // Clone view toggle
+    const viewClone = viewToggle.cloneNode(true);
+    viewClone.querySelectorAll('[id]').forEach(el => {
+      el.id = 'mobile-' + el.id;
+    });
+    filtersExpanded.appendChild(viewClone);
+
+    // Setup mobile filter listeners
+    setupMobileFilterListeners();
+  }
+
+  function setupMobileFilterListeners() {
+    // Sync mobile selects with main selects
+    const mobileGoals = document.getElementById('mobile-filter-goals');
+    const mobileMusles = document.getElementById('mobile-filter-muscles');
+    const mobilePosition = document.getElementById('mobile-filter-position');
+
+    if (mobileGoals) {
+      mobileGoals.addEventListener('change', () => {
+        document.getElementById('filter-goals').value = mobileGoals.value;
+        applyFilters();
+        updateFilterCount();
+      });
+    }
+
+    if (mobileMusles) {
+      mobileMusles.addEventListener('change', () => {
+        document.getElementById('filter-muscles').value = mobileMusles.value;
+        applyFilters();
+        updateFilterCount();
+      });
+    }
+
+    if (mobilePosition) {
+      mobilePosition.addEventListener('change', () => {
+        document.getElementById('filter-position').value = mobilePosition.value;
+        applyFilters();
+        updateFilterCount();
+      });
+    }
+
+    // Mobile view toggle
+    const mobileViewBtns = filtersExpanded.querySelectorAll('.toggle-btn');
+    mobileViewBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const view = btn.dataset.view;
+        const grid = document.getElementById('browse-grid');
+        const listHeader = document.getElementById('list-header');
+
+        // Update both mobile and main toggle states
+        document.querySelectorAll('.toggle-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.view === view);
+        });
+
+        grid.classList.toggle('list-view', view === 'list');
+        listHeader.classList.toggle('hidden', view !== 'list');
+      });
+    });
+
+    // Mobile contra dropdown
+    const mobileContraToggle = document.getElementById('mobile-contra-toggle');
+    const mobileContraDropdown = document.getElementById('mobile-contra-dropdown');
+
+    if (mobileContraToggle && mobileContraDropdown) {
+      mobileContraToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        mobileContraDropdown.classList.toggle('hidden');
+      });
+
+      // Sync checkboxes
+      mobileContraDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const mainCb = document.querySelector(`#contra-options input[value="${cb.value}"]`);
+          if (mainCb) {
+            mainCb.checked = cb.checked;
+            mainCb.dispatchEvent(new Event('change'));
+          }
+          updateFilterCount();
+        });
+      });
+    }
+  }
+
+  function updateFilterCount() {
+    const goalFilter = document.getElementById('filter-goals').value;
+    const muscleFilter = document.getElementById('filter-muscles').value;
+    const positionFilter = document.getElementById('filter-position').value;
+
+    let count = 0;
+    if (goalFilter) count++;
+    if (muscleFilter) count++;
+    if (positionFilter) count++;
+    count += selectedContras.size;
+
+    if (count > 0) {
+      filterCountSpan.textContent = `(${count})`;
+      filterToggle.classList.add('has-filters');
+    } else {
+      filterCountSpan.textContent = '';
+      filterToggle.classList.remove('has-filters');
+    }
+  }
+
+  // Sync mobile search with main search
+  mobileSearchInput.addEventListener('input', () => {
+    mainSearchInput.value = mobileSearchInput.value;
+    searchQuery = mobileSearchInput.value.toLowerCase().trim();
+    applyFilters();
+  });
+
+  // Sync main search to mobile (if user scrolls up and types there)
+  mainSearchInput.addEventListener('input', () => {
+    mobileSearchInput.value = mainSearchInput.value;
+  });
+
+  // Toggle filters expanded
+  filterToggle.addEventListener('click', () => {
+    filtersOpen = !filtersOpen;
+    filtersExpanded.classList.toggle('hidden', !filtersOpen);
+    document.body.classList.toggle('filters-expanded', filtersOpen);
+
+    // Sync current filter values to mobile when opening
+    if (filtersOpen) {
+      const mobileGoals = document.getElementById('mobile-filter-goals');
+      const mobileMuscles = document.getElementById('mobile-filter-muscles');
+      const mobilePosition = document.getElementById('mobile-filter-position');
+
+      if (mobileGoals) mobileGoals.value = document.getElementById('filter-goals').value;
+      if (mobileMuscles) mobileMuscles.value = document.getElementById('filter-muscles').value;
+      if (mobilePosition) mobilePosition.value = document.getElementById('filter-position').value;
+    }
+  });
+
+  // Scroll handler
+  let ticking = false;
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        const scrollY = window.scrollY;
+        const shouldShow = scrollY > stickyThreshold;
+
+        sticky.classList.toggle('visible', shouldShow);
+        document.body.classList.toggle('sticky-active', shouldShow);
+
+        // Close filters when scrolling up past threshold
+        if (!shouldShow && filtersOpen) {
+          filtersOpen = false;
+          filtersExpanded.classList.add('hidden');
+          document.body.classList.remove('filters-expanded');
+        }
+
+        ticking = false;
+      });
+      ticking = true;
+    }
+  });
+
+  // Initialize
+  updateThreshold();
+  window.addEventListener('resize', updateThreshold);
+  populateMobileFilters();
+  updateFilterCount();
+
+  // Update filter count when main filters change
+  ['filter-goals', 'filter-muscles', 'filter-position'].forEach(id => {
+    document.getElementById(id).addEventListener('change', updateFilterCount);
+  });
+}
+
 // ============ Init ============
 
 async function init() {
@@ -480,6 +688,7 @@ async function init() {
   populateFilters();
   setupSearch();
   setupModal();
+  setupMobileSticky();
 
   // Initial render
   applyFilters();
