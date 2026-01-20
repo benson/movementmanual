@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" fill="#fff"/>
+  <g fill="none" stroke="#000" stroke-width="2" stroke-linecap="round">
+    <!-- Outer spiral -->
+    <path d="M16 4 A12 12 0 0 1 28 16 A12 12 0 0 1 16 28 A12 12 0 0 1 4 16 A12 12 0 0 1 14 4.3"/>
+    <!-- Second ring -->
+    <path d="M16 7 A9 9 0 0 1 25 16 A9 9 0 0 1 16 25 A9 9 0 0 1 7 16 A9 9 0 0 1 14.5 7.2"/>
+    <!-- Third ring -->
+    <path d="M16 10 A6 6 0 0 1 22 16 A6 6 0 0 1 16 22 A6 6 0 0 1 10 16 A6 6 0 0 1 15 10.1"/>
+    <!-- Inner ring -->
+    <path d="M16 13 A3 3 0 0 1 19 16 A3 3 0 0 1 16 19 A3 3 0 0 1 13 16 A3 3 0 0 1 15.5 13.1"/>
+    <!-- Center dot -->
+    <circle cx="16" cy="16" r="1" fill="#000"/>
+  </g>
+</svg>
