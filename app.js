@@ -643,11 +643,23 @@ function setupMobileSticky() {
     }
   });
 
+  // Check if mobile
+  function isMobile() {
+    return window.innerWidth <= 600;
+  }
+
   // Scroll handler
   let ticking = false;
   window.addEventListener('scroll', () => {
     if (!ticking) {
       requestAnimationFrame(() => {
+        if (!isMobile()) {
+          sticky.classList.remove('visible');
+          document.body.classList.remove('sticky-active');
+          ticking = false;
+          return;
+        }
+
         const scrollY = window.scrollY;
         const shouldShow = scrollY > stickyThreshold;
 

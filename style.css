@@ -617,14 +617,14 @@ footer a:hover {
   display: none !important;
 }
 
-/* Mobile Sticky Bar */
+/* Mobile Sticky Bar - hidden on desktop */
 .mobile-sticky {
-  display: none;
+  display: none !important;
 }
 
 @media (max-width: 600px) {
   .mobile-sticky {
-    display: none;
+    display: none !important;
     position: fixed;
     top: 0;
     left: 0;
@@ -637,7 +637,7 @@ footer a:hover {
   }
 
   .mobile-sticky.visible {
-    display: block;
+    display: block !important;
   }
 
   .mobile-sticky-row {
