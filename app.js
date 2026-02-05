@@ -5,6 +5,31 @@ let selectedContras = new Set();
 let searchQuery = '';
 let currentMode = localStorage.getItem('mode') || 'mat';
 
+// ============ Theme ============
+
+function initTheme() {
+  const saved = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = saved || (prefersDark ? 'dark' : 'light');
+  applyTheme(theme);
+
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  });
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+  const btn = document.getElementById('theme-toggle');
+  if (theme === 'dark') {
+    btn.innerHTML = '<span class="theme-icon">☼</span> light';
+  } else {
+    btn.innerHTML = '<span class="theme-icon">☽</span> dark';
+  }
+}
+
 // ============ Data Loading ============
 
 async function loadData() {
@@ -728,6 +753,7 @@ function setupMobileSticky() {
 // ============ Init ============
 
 async function init() {
+  initTheme();
   await loadData();
 
   setupModeToggle();
