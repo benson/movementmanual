@@ -3,13 +3,19 @@
 let data = null;
 let selectedContras = new Set();
 let searchQuery = '';
+let currentMode = localStorage.getItem('mode') || 'mat';
 
 // ============ Data Loading ============
 
 async function loadData() {
-  const response = await fetch('./data/exercises.json');
+  const file = currentMode === 'reformer' ? './data/reformer-exercises.json' : './data/exercises.json';
+  const response = await fetch(file);
   data = await response.json();
   return data;
+}
+
+function getImagePath(filename) {
+  return currentMode === 'reformer' ? `./reformer-images/${filename}` : `./images/${filename}`;
 }
 
 function getTagName(category, id) {
@@ -17,14 +23,12 @@ function getTagName(category, id) {
 }
 
 function switchToFilter(filterType, value) {
-  // Reset all filters first
   document.getElementById('filter-goals').value = '';
   document.getElementById('filter-muscles').value = '';
   document.getElementById('filter-position').value = '';
   document.getElementById('exercise-search').value = '';
   searchQuery = '';
 
-  // Set the specific filter
   const filterMap = {
     'goals': 'filter-goals',
     'muscleGroups': 'filter-muscles',
@@ -36,14 +40,46 @@ function switchToFilter(filterType, value) {
     document.getElementById(selectId).value = value;
   }
 
-  // Close modal if open
   hideModal();
-
-  // Apply filters
   applyFilters();
-
-  // Scroll to top
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ============ Mode Toggle ============
+
+function setupModeToggle() {
+  const btns = document.querySelectorAll('.mode-btn');
+
+  // Set initial state from localStorage
+  btns.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === currentMode);
+  });
+
+  btns.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (btn.dataset.mode === currentMode) return;
+
+      currentMode = btn.dataset.mode;
+      localStorage.setItem('mode', currentMode);
+
+      btns.forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
+
+      await switchMode();
+    });
+  });
+}
+
+async function switchMode() {
+  // Reset state
+  selectedContras.clear();
+  searchQuery = '';
+  document.getElementById('exercise-search').value = '';
+  document.getElementById('mobile-search-input').value = '';
+
+  await loadData();
+  rebuildFilters();
+  setupMobileSticky();
+  applyFilters();
 }
 
 // ============ View Toggle ============
@@ -68,12 +104,20 @@ function setupViewToggle() {
 
 // ============ Browse Mode (Filter-First) ============
 
-function populateFilters() {
+function rebuildFilters() {
   const goalsSelect = document.getElementById('filter-goals');
   const musclesSelect = document.getElementById('filter-muscles');
   const positionSelect = document.getElementById('filter-position');
+  const contraOptions = document.getElementById('contra-options');
 
-  // Goals
+  // Clear existing options (keep first "all" option)
+  [goalsSelect, musclesSelect, positionSelect].forEach(select => {
+    while (select.options.length > 1) select.remove(1);
+    select.value = '';
+  });
+  contraOptions.innerHTML = '';
+
+  // Repopulate
   Object.entries(data.tags.goals).forEach(([id, name]) => {
     const option = document.createElement('option');
     option.value = id;
@@ -81,7 +125,6 @@ function populateFilters() {
     goalsSelect.appendChild(option);
   });
 
-  // Muscle Groups
   Object.entries(data.tags.muscleGroups).forEach(([id, name]) => {
     const option = document.createElement('option');
     option.value = id;
@@ -89,7 +132,6 @@ function populateFilters() {
     musclesSelect.appendChild(option);
   });
 
-  // Starting Positions
   Object.entries(data.tags.startingPositions).forEach(([id, name]) => {
     const option = document.createElement('option');
     option.value = id;
@@ -97,12 +139,16 @@ function populateFilters() {
     positionSelect.appendChild(option);
   });
 
-  // Contraindications (multi-select dropdown)
+  // Rebuild contra dropdown
   setupContraDropdown();
+}
+
+function populateFilters() {
+  rebuildFilters();
 
   // Add change listeners for selects
-  [goalsSelect, musclesSelect, positionSelect].forEach(select => {
-    select.addEventListener('change', applyFilters);
+  ['filter-goals', 'filter-muscles', 'filter-position'].forEach(id => {
+    document.getElementById(id).addEventListener('change', applyFilters);
   });
 }
 
@@ -113,7 +159,6 @@ function applyFilters() {
 
   let filtered = data.exercises;
 
-  // Search filter
   if (searchQuery) {
     filtered = filtered.filter(ex =>
       ex.name.toLowerCase().includes(searchQuery)
@@ -132,7 +177,6 @@ function applyFilters() {
     filtered = filtered.filter(ex => ex.startingPosition === positionFilter);
   }
 
-  // Exclude exercises with any selected contraindications
   if (selectedContras.size > 0) {
     filtered = filtered.filter(ex =>
       !ex.contraindications.some(c => selectedContras.has(c))
@@ -148,7 +192,6 @@ function setupContraDropdown() {
   const options = document.getElementById('contra-options');
   const label = document.getElementById('contra-label');
 
-  // Add clear all button
   const clearBtn = document.createElement('button');
   clearBtn.type = 'button';
   clearBtn.className = 'multi-select-clear';
@@ -161,7 +204,6 @@ function setupContraDropdown() {
   });
   options.appendChild(clearBtn);
 
-  // Populate options
   Object.entries(data.tags.contraindications).forEach(([id, name]) => {
     const option = document.createElement('label');
     option.className = 'multi-select-option';
@@ -182,20 +224,23 @@ function setupContraDropdown() {
     });
   });
 
-  // Toggle dropdown
-  toggle.addEventListener('click', () => {
-    dropdown.classList.toggle('hidden');
-  });
+  // Only add toggle listener once (on first call)
+  if (!toggle._bound) {
+    toggle.addEventListener('click', () => {
+      dropdown.classList.toggle('hidden');
+    });
 
-  // Close on outside click
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.multi-select-wrapper')) {
-      dropdown.classList.add('hidden');
-    }
-  });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.multi-select-wrapper')) {
+        dropdown.classList.add('hidden');
+      }
+    });
+    toggle._bound = true;
+  }
+
+  label.textContent = 'none selected';
 
   function updateContraDisplay() {
-    // Update label to show count or names
     if (selectedContras.size === 0) {
       label.textContent = 'none selected';
     } else if (selectedContras.size <= 2) {
@@ -221,7 +266,7 @@ function renderBrowseGrid(exercises) {
   }
 
   grid.innerHTML = exercises.map(ex => {
-    const imageSrc = ex.mainImage ? `./images/${ex.mainImage}` : '';
+    const imageSrc = ex.mainImage ? getImagePath(ex.mainImage) : '';
     const goalTags = ex.goals.map(g =>
       `<span class="tag">${getTagName('goals', g).toLowerCase()}</span>`
     ).join('');
@@ -237,7 +282,6 @@ function renderBrowseGrid(exercises) {
     `;
   }).join('');
 
-  // Add click handlers
   grid.querySelectorAll('.exercise-card').forEach(card => {
     card.addEventListener('click', () => {
       const exercise = data.exercises.find(ex => ex.id === card.dataset.id);
@@ -253,12 +297,10 @@ function setupSearch() {
   const dropdown = document.getElementById('search-dropdown');
   let highlightedIndex = -1;
 
-  // Live filter as you type
   input.addEventListener('input', () => {
     const query = input.value.toLowerCase().trim();
     searchQuery = query;
 
-    // Show dropdown for quick select
     if (query.length >= 1) {
       const matches = data.exercises.filter(ex =>
         ex.name.toLowerCase().includes(query)
@@ -282,7 +324,6 @@ function setupSearch() {
               searchQuery = exercise.name.toLowerCase();
               dropdown.classList.add('hidden');
               applyFilters();
-              // Open modal for this exercise
               showModal(exercise);
             }
           });
@@ -326,7 +367,6 @@ function setupSearch() {
     });
   }
 
-  // Close dropdown on outside click
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.autocomplete-wrapper')) {
       dropdown.classList.add('hidden');
@@ -354,11 +394,12 @@ function setupModal() {
 function showModal(ex) {
   const modal = document.getElementById('exercise-modal');
   const body = document.getElementById('modal-body');
+  const isReformer = currentMode === 'reformer';
 
   const positionName = getTagName('startingPositions', ex.startingPosition);
 
   const images = (ex.images || []).map(img =>
-    `<img class="detail-image" src="./images/${img}" alt="${ex.name}">`
+    `<img class="detail-image" src="${getImagePath(img)}" alt="${ex.name}">`
   ).join('');
 
   const goalTags = ex.goals.map(g =>
@@ -395,6 +436,18 @@ function showModal(ex) {
         <div class="meta-row">
           <span class="meta-label">contras</span>
           <div class="meta-tags">${contraTags}</div>
+        </div>
+      ` : ''}
+      ${isReformer && ex.springTension ? `
+        <div class="meta-row">
+          <span class="meta-label">springs</span>
+          <div class="meta-tags"><span class="detail-tag">${ex.springTension.toLowerCase()}</span></div>
+        </div>
+      ` : ''}
+      ${isReformer && ex.precautions ? `
+        <div class="meta-row">
+          <span class="meta-label">precautions</span>
+          <div class="meta-tags"><span class="detail-tag">${ex.precautions.toLowerCase()}</span></div>
         </div>
       ` : ''}
     </div>
@@ -451,7 +504,6 @@ function showModal(ex) {
     ` : ''}
   `;
 
-  // Add click handlers for filterable tags
   body.querySelectorAll('.detail-tag[data-filter]').forEach(tag => {
     tag.addEventListener('click', () => {
       switchToFilter(tag.dataset.filter, tag.dataset.value);
@@ -461,7 +513,6 @@ function showModal(ex) {
   modal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
 
-  // Scroll modal to top
   modal.querySelector('.modal-content').scrollTop = 0;
 }
 
@@ -480,49 +531,40 @@ function setupMobileSticky() {
   const mobileSearchInput = document.getElementById('mobile-search-input');
   const mainSearchInput = document.getElementById('exercise-search');
   const filterCountSpan = document.getElementById('mobile-filter-count');
-  const controlsRow = document.querySelector('.controls-row');
 
   let stickyThreshold = 0;
   let filtersOpen = false;
 
-  // Calculate threshold after page load
   function updateThreshold() {
     const header = document.querySelector('header');
     stickyThreshold = header.offsetTop + header.offsetHeight + 20;
   }
 
-  // Clone filters into mobile expanded area
   function populateMobileFilters() {
     const filters = document.querySelector('.filters');
     const viewToggle = document.querySelector('.view-toggle');
 
-    // Clone the filter groups
     filtersExpanded.innerHTML = '';
     filters.querySelectorAll('.filter-group').forEach(group => {
-      // Skip search in mobile filters (it's always visible)
       if (group.querySelector('#exercise-search')) return;
 
       const clone = group.cloneNode(true);
-      // Update IDs to avoid conflicts
       clone.querySelectorAll('[id]').forEach(el => {
         el.id = 'mobile-' + el.id;
       });
       filtersExpanded.appendChild(clone);
     });
 
-    // Clone view toggle
     const viewClone = viewToggle.cloneNode(true);
     viewClone.querySelectorAll('[id]').forEach(el => {
       el.id = 'mobile-' + el.id;
     });
     filtersExpanded.appendChild(viewClone);
 
-    // Setup mobile filter listeners
     setupMobileFilterListeners();
   }
 
   function setupMobileFilterListeners() {
-    // Sync mobile selects with main selects
     const mobileGoals = document.getElementById('mobile-filter-goals');
     const mobileMusles = document.getElementById('mobile-filter-muscles');
     const mobilePosition = document.getElementById('mobile-filter-position');
@@ -551,7 +593,6 @@ function setupMobileSticky() {
       });
     }
 
-    // Mobile view toggle
     const mobileViewBtns = filtersExpanded.querySelectorAll('.toggle-btn');
     mobileViewBtns.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -559,7 +600,6 @@ function setupMobileSticky() {
         const grid = document.getElementById('browse-grid');
         const listHeader = document.getElementById('list-header');
 
-        // Update both mobile and main toggle states
         document.querySelectorAll('.toggle-btn').forEach(b => {
           b.classList.toggle('active', b.dataset.view === view);
         });
@@ -569,7 +609,6 @@ function setupMobileSticky() {
       });
     });
 
-    // Mobile contra dropdown
     const mobileContraToggle = document.getElementById('mobile-contra-toggle');
     const mobileContraDropdown = document.getElementById('mobile-contra-dropdown');
 
@@ -579,7 +618,6 @@ function setupMobileSticky() {
         mobileContraDropdown.classList.toggle('hidden');
       });
 
-      // Sync checkboxes
       mobileContraDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
         cb.addEventListener('change', () => {
           const mainCb = document.querySelector(`#contra-options input[value="${cb.value}"]`);
@@ -613,79 +651,75 @@ function setupMobileSticky() {
     }
   }
 
-  // Sync mobile search with main search
-  mobileSearchInput.addEventListener('input', () => {
-    mainSearchInput.value = mobileSearchInput.value;
-    searchQuery = mobileSearchInput.value.toLowerCase().trim();
-    applyFilters();
-  });
+  // Only bind these listeners once
+  if (!sticky._bound) {
+    mobileSearchInput.addEventListener('input', () => {
+      mainSearchInput.value = mobileSearchInput.value;
+      searchQuery = mobileSearchInput.value.toLowerCase().trim();
+      applyFilters();
+    });
 
-  // Sync main search to mobile (if user scrolls up and types there)
-  mainSearchInput.addEventListener('input', () => {
-    mobileSearchInput.value = mainSearchInput.value;
-  });
+    mainSearchInput.addEventListener('input', () => {
+      mobileSearchInput.value = mainSearchInput.value;
+    });
 
-  // Toggle filters expanded
-  filterToggle.addEventListener('click', () => {
-    filtersOpen = !filtersOpen;
-    filtersExpanded.classList.toggle('hidden', !filtersOpen);
-    document.body.classList.toggle('filters-expanded', filtersOpen);
+    filterToggle.addEventListener('click', () => {
+      filtersOpen = !filtersOpen;
+      filtersExpanded.classList.toggle('hidden', !filtersOpen);
+      document.body.classList.toggle('filters-expanded', filtersOpen);
 
-    // Sync current filter values to mobile when opening
-    if (filtersOpen) {
-      const mobileGoals = document.getElementById('mobile-filter-goals');
-      const mobileMuscles = document.getElementById('mobile-filter-muscles');
-      const mobilePosition = document.getElementById('mobile-filter-position');
+      if (filtersOpen) {
+        const mobileGoals = document.getElementById('mobile-filter-goals');
+        const mobileMuscles = document.getElementById('mobile-filter-muscles');
+        const mobilePosition = document.getElementById('mobile-filter-position');
 
-      if (mobileGoals) mobileGoals.value = document.getElementById('filter-goals').value;
-      if (mobileMuscles) mobileMuscles.value = document.getElementById('filter-muscles').value;
-      if (mobilePosition) mobilePosition.value = document.getElementById('filter-position').value;
+        if (mobileGoals) mobileGoals.value = document.getElementById('filter-goals').value;
+        if (mobileMuscles) mobileMuscles.value = document.getElementById('filter-muscles').value;
+        if (mobilePosition) mobilePosition.value = document.getElementById('filter-position').value;
+      }
+    });
+
+    function isMobile() {
+      return window.innerWidth <= 600;
     }
-  });
 
-  // Check if mobile
-  function isMobile() {
-    return window.innerWidth <= 600;
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          if (!isMobile()) {
+            sticky.classList.remove('visible');
+            document.body.classList.remove('sticky-active');
+            ticking = false;
+            return;
+          }
+
+          const scrollY = window.scrollY;
+          const shouldShow = scrollY > stickyThreshold;
+
+          sticky.classList.toggle('visible', shouldShow);
+          document.body.classList.toggle('sticky-active', shouldShow);
+
+          if (!shouldShow && filtersOpen) {
+            filtersOpen = false;
+            filtersExpanded.classList.add('hidden');
+            document.body.classList.remove('filters-expanded');
+          }
+
+          ticking = false;
+        });
+        ticking = true;
+      }
+    });
+
+    sticky._bound = true;
   }
 
-  // Scroll handler
-  let ticking = false;
-  window.addEventListener('scroll', () => {
-    if (!ticking) {
-      requestAnimationFrame(() => {
-        if (!isMobile()) {
-          sticky.classList.remove('visible');
-          document.body.classList.remove('sticky-active');
-          ticking = false;
-          return;
-        }
-
-        const scrollY = window.scrollY;
-        const shouldShow = scrollY > stickyThreshold;
-
-        sticky.classList.toggle('visible', shouldShow);
-        document.body.classList.toggle('sticky-active', shouldShow);
-
-        // Close filters when scrolling up past threshold
-        if (!shouldShow && filtersOpen) {
-          filtersOpen = false;
-          filtersExpanded.classList.add('hidden');
-          document.body.classList.remove('filters-expanded');
-        }
-
-        ticking = false;
-      });
-      ticking = true;
-    }
-  });
-
-  // Initialize
   updateThreshold();
   window.addEventListener('resize', updateThreshold);
   populateMobileFilters();
   updateFilterCount();
 
-  // Update filter count when main filters change
   ['filter-goals', 'filter-muscles', 'filter-position'].forEach(id => {
     document.getElementById(id).addEventListener('change', updateFilterCount);
   });
@@ -696,13 +730,13 @@ function setupMobileSticky() {
 async function init() {
   await loadData();
 
+  setupModeToggle();
   setupViewToggle();
   populateFilters();
   setupSearch();
   setupModal();
   setupMobileSticky();
 
-  // Initial render
   applyFilters();
 }
 
