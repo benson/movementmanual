@@ -111,30 +111,120 @@ function prepareReformerData() {
   );
 }
 
+// ============ Multi-Select Dropdowns ============
+
+const multiSelects = {};
+
+function setupMultiSelect({ key, toggleId, dropdownId, optionsId, labelId, selectedSet, entries, nameMap }) {
+  const toggle = document.getElementById(toggleId);
+  const dropdown = document.getElementById(dropdownId);
+  const options = document.getElementById(optionsId);
+  const label = document.getElementById(labelId);
+
+  selectedSet.clear();
+  options.innerHTML = '';
+
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.className = 'multi-select-clear';
+  clearBtn.textContent = 'clear all';
+  clearBtn.addEventListener('click', () => {
+    selectedSet.clear();
+    options.querySelectorAll('input').forEach(cb => cb.checked = false);
+    updateMultiSelectDisplay(key);
+    applyFilters();
+  });
+  options.appendChild(clearBtn);
+
+  entries.forEach(([id, name]) => {
+    const option = document.createElement('label');
+    option.className = 'multi-select-option';
+    option.innerHTML = `
+      <input type="checkbox" value="${id}">
+      ${name.toLowerCase()}
+    `;
+    options.appendChild(option);
+
+    option.querySelector('input').addEventListener('change', (e) => {
+      if (e.target.checked) {
+        selectedSet.add(id);
+      } else {
+        selectedSet.delete(id);
+      }
+      updateMultiSelectDisplay(key);
+      applyFilters();
+    });
+  });
+
+  if (!toggle._bound) {
+    toggle.addEventListener('click', () => {
+      dropdown.classList.toggle('hidden');
+    });
+    toggle._bound = true;
+  }
+
+  label.textContent = 'none selected';
+
+  multiSelects[key] = { toggle, dropdown, label, selectedSet, nameMap };
+}
+
+function updateMultiSelectDisplay(key) {
+  const ms = multiSelects[key];
+  if (!ms) return;
+  const { label, selectedSet, nameMap } = ms;
+  if (selectedSet.size === 0) {
+    label.textContent = 'none selected';
+  } else if (selectedSet.size <= 2) {
+    label.textContent = [...selectedSet].map(id => nameMap(id)).join(', ');
+  } else {
+    label.textContent = `${selectedSet.size} selected`;
+  }
+}
+
+// Single document click listener to close all open multi-select dropdowns
+document.addEventListener('click', (e) => {
+  Object.values(multiSelects).forEach(({ toggle, dropdown }) => {
+    if (!toggle.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.classList.add('hidden');
+    }
+  });
+  // Also close search autocomplete
+  if (!e.target.closest('.autocomplete-wrapper')) {
+    const sd = document.getElementById('search-dropdown');
+    if (sd) sd.classList.add('hidden');
+  }
+});
+
 function switchToFilter(filterType, value) {
   selectedGoals.clear();
   selectedMuscles.clear();
   document.getElementById('filter-position').value = '';
-  document.getElementById('filter-orientation').value = '';
+  if (currentMode === 'reformer') {
+    document.getElementById('filter-orientation').value = '';
+  }
   document.getElementById('exercise-search').value = '';
   searchQuery = '';
   selectedSpringColors.clear();
   selectedSpringCombos.clear();
-  updateGoalsDisplay();
-  updateMusclesDisplay();
-  updateSpringComboDisplay();
+
+  // Uncheck all multi-select checkboxes
+  Object.keys(multiSelects).forEach(k => {
+    const opts = document.getElementById(multiSelects[k].toggle.id.replace('-toggle', '-options'));
+    if (opts) opts.querySelectorAll('input').forEach(cb => cb.checked = false);
+    updateMultiSelectDisplay(k);
+  });
   document.querySelectorAll('.spring-toggle').forEach(b => b.classList.remove('active'));
 
   if (filterType === 'goals') {
     selectedGoals.add(value);
-    updateGoalsDisplay();
     const cb = document.querySelector(`#goals-options input[value="${value}"]`);
     if (cb) cb.checked = true;
+    updateMultiSelectDisplay('goals');
   } else if (filterType === 'muscleGroups') {
     selectedMuscles.add(value);
-    updateMusclesDisplay();
     const cb = document.querySelector(`#muscles-options input[value="${value}"]`);
     if (cb) cb.checked = true;
+    updateMultiSelectDisplay('muscles');
   } else if (filterType === 'startingPositions') {
     document.getElementById('filter-position').value = value;
   } else if (filterType === 'orientation') {
@@ -151,7 +241,6 @@ function switchToFilter(filterType, value) {
 function setupModeToggle() {
   const btns = document.querySelectorAll('.mode-btn');
 
-  // Set initial state from localStorage
   btns.forEach(btn => {
     btn.classList.toggle('active', btn.dataset.mode === currentMode);
   });
@@ -171,7 +260,6 @@ function setupModeToggle() {
 }
 
 async function switchMode() {
-  // Reset state
   selectedGoals.clear();
   selectedMuscles.clear();
   selectedContras.clear();
@@ -222,9 +310,29 @@ function rebuildFilters() {
     positionSelect.appendChild(option);
   });
 
-  setupGoalsDropdown();
-  setupMusclesDropdown();
-  setupContraDropdown();
+  setupMultiSelect({
+    key: 'goals', toggleId: 'goals-toggle', dropdownId: 'goals-dropdown',
+    optionsId: 'goals-options', labelId: 'goals-label',
+    selectedSet: selectedGoals,
+    entries: Object.entries(data.tags.goals),
+    nameMap: id => data.tags.goals[id].toLowerCase()
+  });
+
+  setupMultiSelect({
+    key: 'muscles', toggleId: 'muscles-toggle', dropdownId: 'muscles-dropdown',
+    optionsId: 'muscles-options', labelId: 'muscles-label',
+    selectedSet: selectedMuscles,
+    entries: Object.entries(data.tags.muscleGroups),
+    nameMap: id => data.tags.muscleGroups[id].toLowerCase()
+  });
+
+  setupMultiSelect({
+    key: 'contras', toggleId: 'contra-toggle', dropdownId: 'contra-dropdown',
+    optionsId: 'contra-options', labelId: 'contra-label',
+    selectedSet: selectedContras,
+    entries: Object.entries(data.tags.contraindications),
+    nameMap: id => data.tags.contraindications[id].toLowerCase().replace(/^acute /, '').split(' ')[0]
+  });
 
   // Show/hide reformer-only filters
   document.querySelectorAll('.reformer-only').forEach(el => {
@@ -244,7 +352,14 @@ function rebuildFilters() {
       orientationSelect.appendChild(option);
     });
 
-    setupSpringComboDropdown();
+    setupMultiSelect({
+      key: 'springCombo', toggleId: 'spring-combo-toggle', dropdownId: 'spring-combo-dropdown',
+      optionsId: 'spring-combo-options', labelId: 'spring-combo-label',
+      selectedSet: selectedSpringCombos,
+      entries: data._springCombos.map(c => [c, c]),
+      nameMap: id => id.toLowerCase()
+    });
+
     setupSpringColorToggles();
   }
 }
@@ -252,7 +367,6 @@ function rebuildFilters() {
 function populateFilters() {
   rebuildFilters();
 
-  // Add change listeners for selects
   ['filter-position', 'filter-orientation'].forEach(id => {
     document.getElementById(id).addEventListener('change', applyFilters);
   });
@@ -303,281 +417,6 @@ function applyFilters() {
   }
 
   renderBrowseGrid(filtered);
-}
-
-function setupGoalsDropdown() {
-  const toggle = document.getElementById('goals-toggle');
-  const dropdown = document.getElementById('goals-dropdown');
-  const options = document.getElementById('goals-options');
-  const label = document.getElementById('goals-label');
-
-  selectedGoals.clear();
-  options.innerHTML = '';
-
-  const clearBtn = document.createElement('button');
-  clearBtn.type = 'button';
-  clearBtn.className = 'multi-select-clear';
-  clearBtn.textContent = 'clear all';
-  clearBtn.addEventListener('click', () => {
-    selectedGoals.clear();
-    options.querySelectorAll('input').forEach(cb => cb.checked = false);
-    updateGoalsDisplay();
-    applyFilters();
-  });
-  options.appendChild(clearBtn);
-
-  Object.entries(data.tags.goals).forEach(([id, name]) => {
-    const option = document.createElement('label');
-    option.className = 'multi-select-option';
-    option.innerHTML = `
-      <input type="checkbox" value="${id}">
-      ${name.toLowerCase()}
-    `;
-    options.appendChild(option);
-
-    option.querySelector('input').addEventListener('change', (e) => {
-      if (e.target.checked) {
-        selectedGoals.add(id);
-      } else {
-        selectedGoals.delete(id);
-      }
-      updateGoalsDisplay();
-      applyFilters();
-    });
-  });
-
-  if (!toggle._bound) {
-    toggle.addEventListener('click', () => {
-      dropdown.classList.toggle('hidden');
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!toggle.contains(e.target) && !dropdown.contains(e.target)) {
-        dropdown.classList.add('hidden');
-      }
-    });
-    toggle._bound = true;
-  }
-
-  label.textContent = 'none selected';
-}
-
-function updateGoalsDisplay() {
-  const label = document.getElementById('goals-label');
-  if (!label) return;
-  if (selectedGoals.size === 0) {
-    label.textContent = 'none selected';
-  } else if (selectedGoals.size <= 2) {
-    label.textContent = [...selectedGoals].map(id => data.tags.goals[id].toLowerCase()).join(', ');
-  } else {
-    label.textContent = `${selectedGoals.size} selected`;
-  }
-}
-
-function setupMusclesDropdown() {
-  const toggle = document.getElementById('muscles-toggle');
-  const dropdown = document.getElementById('muscles-dropdown');
-  const options = document.getElementById('muscles-options');
-  const label = document.getElementById('muscles-label');
-
-  selectedMuscles.clear();
-  options.innerHTML = '';
-
-  const clearBtn = document.createElement('button');
-  clearBtn.type = 'button';
-  clearBtn.className = 'multi-select-clear';
-  clearBtn.textContent = 'clear all';
-  clearBtn.addEventListener('click', () => {
-    selectedMuscles.clear();
-    options.querySelectorAll('input').forEach(cb => cb.checked = false);
-    updateMusclesDisplay();
-    applyFilters();
-  });
-  options.appendChild(clearBtn);
-
-  Object.entries(data.tags.muscleGroups).forEach(([id, name]) => {
-    const option = document.createElement('label');
-    option.className = 'multi-select-option';
-    option.innerHTML = `
-      <input type="checkbox" value="${id}">
-      ${name.toLowerCase()}
-    `;
-    options.appendChild(option);
-
-    option.querySelector('input').addEventListener('change', (e) => {
-      if (e.target.checked) {
-        selectedMuscles.add(id);
-      } else {
-        selectedMuscles.delete(id);
-      }
-      updateMusclesDisplay();
-      applyFilters();
-    });
-  });
-
-  if (!toggle._bound) {
-    toggle.addEventListener('click', () => {
-      dropdown.classList.toggle('hidden');
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!toggle.contains(e.target) && !dropdown.contains(e.target)) {
-        dropdown.classList.add('hidden');
-      }
-    });
-    toggle._bound = true;
-  }
-
-  label.textContent = 'none selected';
-}
-
-function updateMusclesDisplay() {
-  const label = document.getElementById('muscles-label');
-  if (!label) return;
-  if (selectedMuscles.size === 0) {
-    label.textContent = 'none selected';
-  } else if (selectedMuscles.size <= 2) {
-    label.textContent = [...selectedMuscles].map(id => data.tags.muscleGroups[id].toLowerCase()).join(', ');
-  } else {
-    label.textContent = `${selectedMuscles.size} selected`;
-  }
-}
-
-function setupContraDropdown() {
-  const toggle = document.getElementById('contra-toggle');
-  const dropdown = document.getElementById('contra-dropdown');
-  const options = document.getElementById('contra-options');
-  const label = document.getElementById('contra-label');
-
-  const clearBtn = document.createElement('button');
-  clearBtn.type = 'button';
-  clearBtn.className = 'multi-select-clear';
-  clearBtn.textContent = 'clear all';
-  clearBtn.addEventListener('click', () => {
-    selectedContras.clear();
-    options.querySelectorAll('input').forEach(cb => cb.checked = false);
-    updateContraDisplay();
-    applyFilters();
-  });
-  options.appendChild(clearBtn);
-
-  Object.entries(data.tags.contraindications).forEach(([id, name]) => {
-    const option = document.createElement('label');
-    option.className = 'multi-select-option';
-    option.innerHTML = `
-      <input type="checkbox" value="${id}">
-      ${name.toLowerCase()}
-    `;
-    options.appendChild(option);
-
-    option.querySelector('input').addEventListener('change', (e) => {
-      if (e.target.checked) {
-        selectedContras.add(id);
-      } else {
-        selectedContras.delete(id);
-      }
-      updateContraDisplay();
-      applyFilters();
-    });
-  });
-
-  // Only add toggle listener once (on first call)
-  if (!toggle._bound) {
-    toggle.addEventListener('click', () => {
-      dropdown.classList.toggle('hidden');
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!toggle.contains(e.target) && !dropdown.contains(e.target)) {
-        dropdown.classList.add('hidden');
-      }
-    });
-    toggle._bound = true;
-  }
-
-  label.textContent = 'none selected';
-
-  function updateContraDisplay() {
-    if (selectedContras.size === 0) {
-      label.textContent = 'none selected';
-    } else if (selectedContras.size <= 2) {
-      const names = Array.from(selectedContras).map(id =>
-        data.tags.contraindications[id].toLowerCase().replace(/^acute /, '').split(' ')[0]
-      );
-      label.textContent = names.join(', ');
-    } else {
-      label.textContent = `${selectedContras.size} selected`;
-    }
-  }
-}
-
-function setupSpringComboDropdown() {
-  const toggle = document.getElementById('spring-combo-toggle');
-  const dropdown = document.getElementById('spring-combo-dropdown');
-  const options = document.getElementById('spring-combo-options');
-  const label = document.getElementById('spring-combo-label');
-
-  selectedSpringCombos.clear();
-  options.innerHTML = '';
-
-  const clearBtn = document.createElement('button');
-  clearBtn.type = 'button';
-  clearBtn.className = 'multi-select-clear';
-  clearBtn.textContent = 'clear all';
-  clearBtn.addEventListener('click', () => {
-    selectedSpringCombos.clear();
-    options.querySelectorAll('input').forEach(cb => cb.checked = false);
-    updateSpringComboDisplay();
-    applyFilters();
-  });
-  options.appendChild(clearBtn);
-
-  data._springCombos.forEach(combo => {
-    const option = document.createElement('label');
-    option.className = 'multi-select-option';
-    option.innerHTML = `
-      <input type="checkbox" value="${combo}">
-      ${combo.toLowerCase()}
-    `;
-    options.appendChild(option);
-
-    option.querySelector('input').addEventListener('change', (e) => {
-      if (e.target.checked) {
-        selectedSpringCombos.add(combo);
-      } else {
-        selectedSpringCombos.delete(combo);
-      }
-      updateSpringComboDisplay();
-      applyFilters();
-    });
-  });
-
-  if (!toggle._bound) {
-    toggle.addEventListener('click', () => {
-      dropdown.classList.toggle('hidden');
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!toggle.contains(e.target) && !dropdown.contains(e.target)) {
-        dropdown.classList.add('hidden');
-      }
-    });
-    toggle._bound = true;
-  }
-
-  label.textContent = 'none selected';
-}
-
-function updateSpringComboDisplay() {
-  const label = document.getElementById('spring-combo-label');
-  if (!label) return;
-  if (selectedSpringCombos.size === 0) {
-    label.textContent = 'none selected';
-  } else if (selectedSpringCombos.size <= 2) {
-    label.textContent = [...selectedSpringCombos].join(', ').toLowerCase();
-  } else {
-    label.textContent = `${selectedSpringCombos.size} selected`;
-  }
 }
 
 function setupSpringColorToggles() {
@@ -754,12 +593,6 @@ function setupSearch() {
       opt.classList.toggle('highlighted', i === highlightedIndex);
     });
   }
-
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.autocomplete-wrapper')) {
-      dropdown.classList.add('hidden');
-    }
-  });
 }
 
 // ============ Modal (for Browse mode) ============
@@ -926,8 +759,11 @@ function setupMobileSticky() {
   const mainSearchInput = document.getElementById('exercise-search');
   const filterCountSpan = document.getElementById('mobile-filter-count');
 
-  let stickyThreshold = 0;
   let filtersOpen = false;
+
+  function isMobile() {
+    return window.innerWidth <= 600;
+  }
 
   function updateStickyPadding() {
     if (!isMobile()) {
@@ -943,18 +779,12 @@ function setupMobileSticky() {
     }
   }
 
-  function updateThreshold() {
-    const header = document.querySelector('header');
-    stickyThreshold = header.offsetTop + header.offsetHeight + 20;
-  }
-
   function populateMobileFilters() {
     const filters = document.querySelector('.filters');
     const viewToggle = document.querySelector('.view-toggle');
 
     filtersExpanded.innerHTML = '';
 
-    // Build compact chip row
     const chipRow = document.createElement('div');
     chipRow.className = 'mobile-chip-row';
 
@@ -962,7 +792,6 @@ function setupMobileSticky() {
 
     filters.querySelectorAll('.filter-group').forEach(group => {
       if (group.querySelector('#exercise-search')) return;
-      // Skip hidden reformer-only filters when in mat mode
       if (group.classList.contains('hidden') && group.classList.contains('reformer-only')) return;
 
       const label = group.querySelector('label');
@@ -972,14 +801,12 @@ function setupMobileSticky() {
       chip.type = 'button';
       chip.className = 'mobile-filter-chip';
       chip.textContent = name;
-      chip.dataset.panelIndex = panels.length;
 
       const panel = document.createElement('div');
       panel.className = 'mobile-filter-panel hidden';
 
       const clone = group.cloneNode(true);
       clone.classList.remove('hidden', 'reformer-only');
-      // Remove the label from the clone since the chip serves as the label
       const cloneLabel = clone.querySelector('label');
       if (cloneLabel) cloneLabel.remove();
       clone.querySelectorAll('[id]').forEach(el => {
@@ -996,7 +823,6 @@ function setupMobileSticky() {
     viewChip.type = 'button';
     viewChip.className = 'mobile-filter-chip';
     viewChip.textContent = 'view';
-    viewChip.dataset.panelIndex = panels.length;
 
     const viewPanel = document.createElement('div');
     viewPanel.className = 'mobile-filter-panel hidden';
@@ -1013,16 +839,13 @@ function setupMobileSticky() {
     filtersExpanded.appendChild(chipRow);
     panels.forEach(p => filtersExpanded.appendChild(p.panel));
 
-    // Chip toggle behavior — one panel at a time
-    panels.forEach((p, i) => {
+    panels.forEach(p => {
       p.chip.addEventListener('click', () => {
         const wasOpen = p.chip.classList.contains('active');
-        // Close all
         panels.forEach(q => {
           q.chip.classList.remove('active');
           q.panel.classList.add('hidden');
         });
-        // Toggle this one
         if (!wasOpen) {
           p.chip.classList.add('active');
           p.panel.classList.remove('hidden');
@@ -1037,37 +860,20 @@ function setupMobileSticky() {
   function setupMobileFilterListeners() {
     const mobilePosition = document.getElementById('mobile-filter-position');
 
-    // Goals multi-select
-    const mobileGoalsToggle = document.getElementById('mobile-goals-toggle');
-    const mobileGoalsDropdown = document.getElementById('mobile-goals-dropdown');
-    if (mobileGoalsToggle && mobileGoalsDropdown) {
-      mobileGoalsToggle.addEventListener('click', (e) => {
-        e.stopPropagation();
-        mobileGoalsDropdown.classList.toggle('hidden');
-      });
-      mobileGoalsDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-        cb.addEventListener('change', () => {
-          const mainCb = document.querySelector(`#goals-options input[value="${cb.value}"]`);
-          if (mainCb) {
-            mainCb.checked = cb.checked;
-            mainCb.dispatchEvent(new Event('change'));
-          }
-          updateFilterCount();
-        });
-      });
-    }
+    // Multi-select checkbox sync (goals, muscles, contras, spring combo)
+    const multiSelectMappings = [
+      { optionsId: 'mobile-goals-options', mainOptionsId: 'goals-options' },
+      { optionsId: 'mobile-muscles-options', mainOptionsId: 'muscles-options' },
+      { optionsId: 'mobile-contra-options', mainOptionsId: 'contra-options' },
+      { optionsId: 'mobile-spring-combo-options', mainOptionsId: 'spring-combo-options' },
+    ];
 
-    // Muscles multi-select
-    const mobileMusclesToggle = document.getElementById('mobile-muscles-toggle');
-    const mobileMusclesDropdown = document.getElementById('mobile-muscles-dropdown');
-    if (mobileMusclesToggle && mobileMusclesDropdown) {
-      mobileMusclesToggle.addEventListener('click', (e) => {
-        e.stopPropagation();
-        mobileMusclesDropdown.classList.toggle('hidden');
-      });
-      mobileMusclesDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    multiSelectMappings.forEach(({ optionsId, mainOptionsId }) => {
+      const container = document.getElementById(optionsId);
+      if (!container) return;
+      container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
         cb.addEventListener('change', () => {
-          const mainCb = document.querySelector(`#muscles-options input[value="${cb.value}"]`);
+          const mainCb = document.querySelector(`#${mainOptionsId} input[value="${cb.value}"]`);
           if (mainCb) {
             mainCb.checked = cb.checked;
             mainCb.dispatchEvent(new Event('change'));
@@ -1075,7 +881,7 @@ function setupMobileSticky() {
           updateFilterCount();
         });
       });
-    }
+    });
 
     if (mobilePosition) {
       mobilePosition.addEventListener('change', () => {
@@ -1109,48 +915,6 @@ function setupMobileSticky() {
         listHeader.classList.toggle('hidden', view !== 'list');
       });
     });
-
-    const mobileContraToggle = document.getElementById('mobile-contra-toggle');
-    const mobileContraDropdown = document.getElementById('mobile-contra-dropdown');
-
-    if (mobileContraToggle && mobileContraDropdown) {
-      mobileContraToggle.addEventListener('click', (e) => {
-        e.stopPropagation();
-        mobileContraDropdown.classList.toggle('hidden');
-      });
-
-      mobileContraDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-        cb.addEventListener('change', () => {
-          const mainCb = document.querySelector(`#contra-options input[value="${cb.value}"]`);
-          if (mainCb) {
-            mainCb.checked = cb.checked;
-            mainCb.dispatchEvent(new Event('change'));
-          }
-          updateFilterCount();
-        });
-      });
-    }
-
-    // Spring combo multi-select
-    const mobileSpringComboToggle = document.getElementById('mobile-spring-combo-toggle');
-    const mobileSpringComboDropdown = document.getElementById('mobile-spring-combo-dropdown');
-    if (mobileSpringComboToggle && mobileSpringComboDropdown) {
-      mobileSpringComboToggle.addEventListener('click', (e) => {
-        e.stopPropagation();
-        mobileSpringComboDropdown.classList.toggle('hidden');
-      });
-
-      mobileSpringComboDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-        cb.addEventListener('change', () => {
-          const mainCb = document.querySelector(`#spring-combo-options input[value="${cb.value}"]`);
-          if (mainCb) {
-            mainCb.checked = cb.checked;
-            mainCb.dispatchEvent(new Event('change'));
-          }
-          updateFilterCount();
-        });
-      });
-    }
 
     // Spring color toggles
     filtersExpanded.querySelectorAll('.spring-toggle').forEach(btn => {
@@ -1195,10 +959,6 @@ function setupMobileSticky() {
     }
   }
 
-  function isMobile() {
-    return window.innerWidth <= 600;
-  }
-
   // Only bind these listeners once
   if (!sticky._bound) {
     mobileSearchInput.addEventListener('input', () => {
@@ -1216,38 +976,25 @@ function setupMobileSticky() {
       filtersExpanded.classList.toggle('hidden', !filtersOpen);
 
       if (filtersOpen) {
+        // Sync select values
         const mobilePosition = document.getElementById('mobile-filter-position');
         if (mobilePosition) mobilePosition.value = document.getElementById('filter-position').value;
-
-        // Sync goals checkboxes
-        filtersExpanded.querySelectorAll('#mobile-goals-options input[type="checkbox"]').forEach(cb => {
-          cb.checked = selectedGoals.has(cb.value);
-        });
-        const mobileGoalsLabel = document.getElementById('mobile-goals-label');
-        if (mobileGoalsLabel) {
-          const gl = document.getElementById('goals-label');
-          if (gl) mobileGoalsLabel.textContent = gl.textContent;
-        }
-        // Sync muscles checkboxes
-        filtersExpanded.querySelectorAll('#mobile-muscles-options input[type="checkbox"]').forEach(cb => {
-          cb.checked = selectedMuscles.has(cb.value);
-        });
-        const mobileMusclesLabel = document.getElementById('mobile-muscles-label');
-        if (mobileMusclesLabel) {
-          const ml = document.getElementById('muscles-label');
-          if (ml) mobileMusclesLabel.textContent = ml.textContent;
-        }
         const mobileOrientation = document.getElementById('mobile-filter-orientation');
         if (mobileOrientation) mobileOrientation.value = document.getElementById('filter-orientation').value;
-        // Sync spring combo checkboxes
-        filtersExpanded.querySelectorAll('#mobile-spring-combo-options input[type="checkbox"]').forEach(cb => {
-          cb.checked = selectedSpringCombos.has(cb.value);
+
+        // Sync multi-select checkboxes
+        const syncMap = [
+          { mobileOpts: 'mobile-goals-options', set: selectedGoals },
+          { mobileOpts: 'mobile-muscles-options', set: selectedMuscles },
+          { mobileOpts: 'mobile-contra-options', set: selectedContras },
+          { mobileOpts: 'mobile-spring-combo-options', set: selectedSpringCombos },
+        ];
+        syncMap.forEach(({ mobileOpts, set }) => {
+          filtersExpanded.querySelectorAll(`#${mobileOpts} input[type="checkbox"]`).forEach(cb => {
+            cb.checked = set.has(cb.value);
+          });
         });
-        const mobileComboLabel = document.getElementById('mobile-spring-combo-label');
-        if (mobileComboLabel) {
-          const label = document.getElementById('spring-combo-label');
-          if (label) mobileComboLabel.textContent = label.textContent;
-        }
+
         filtersExpanded.querySelectorAll('.spring-toggle').forEach(btn => {
           btn.classList.toggle('active', selectedSpringColors.has(btn.dataset.color));
         });
@@ -1255,12 +1002,9 @@ function setupMobileSticky() {
       updateStickyPadding();
     });
 
-
     sticky._bound = true;
   }
 
-  updateThreshold();
-  window.addEventListener('resize', updateThreshold);
   populateMobileFilters();
   updateFilterCount();
 

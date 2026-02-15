@@ -349,15 +349,7 @@ select:focus {
 .s-dot.yellow { background: #f1c40f; }
 .s-dot.blue { background: #3498db; }
 
-.selected-tags {
-  display: none;
-}
-
 /* Autocomplete */
-.search-section {
-  margin-bottom: 30px;
-}
-
 .autocomplete-wrapper {
   position: relative;
 }
@@ -913,29 +905,12 @@ select:focus {
     display: block !important;
   }
 
-}
-
-/* Responsive */
-@media (max-width: 600px) {
   body {
     padding: 70px 15px 80px;
   }
 
   .controls-row {
     display: none;
-  }
-
-  .filters {
-    flex-direction: column;
-    gap: 16px;
-    width: 100%;
-  }
-
-  select,
-  .autocomplete-wrapper input,
-  .multi-select-toggle {
-    width: 100%;
-    min-width: unset;
   }
 
   .exercise-grid {
