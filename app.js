@@ -68,22 +68,51 @@ function parseSpringTension(tension) {
   return { colors, combo };
 }
 
-function prepareSpringData() {
+const SERIES_ORIENTATION = {
+  'footwork': 'supine', 'bridges': 'supine', 'feet-in-straps': 'supine',
+  'hands-in-straps': 'supine', 'supine-abdominal-series': 'supine',
+  'side-lying': 'side-lying',
+  'well-facing-arms': 'well-facing', 'reverse-abdominals': 'well-facing',
+  'roll-down-with-straps': 'well-facing',
+  'forward-facing-arms': 'forward-facing',
+  'side-facing-arms': 'side-facing',
+  'planks': 'plank',
+  'standing-series': 'standing', 'lunge-series': 'standing',
+  'short-box': 'short-box', 'long-box': 'long-box',
+  'stretches': 'stretches', 'jumpboard': 'jumpboard'
+};
+
+const ORIENTATION_NAMES = {
+  'supine': 'Supine', 'side-lying': 'Side Lying',
+  'well-facing': 'Well Facing', 'forward-facing': 'Forward Facing',
+  'side-facing': 'Side Facing', 'plank': 'Plank',
+  'standing': 'Standing', 'short-box': 'Short Box',
+  'long-box': 'Long Box', 'stretches': 'Stretches', 'jumpboard': 'Jumpboard'
+};
+
+function prepareReformerData() {
   if (currentMode !== 'reformer') return;
   data.exercises.forEach(ex => {
     ex._springs = parseSpringTension(ex.springTension);
+    ex._orientation = SERIES_ORIENTATION[ex.series] || 'other';
   });
   const combos = new Set();
+  const orientations = new Set();
   data.exercises.forEach(ex => {
     if (ex._springs.combo) combos.add(ex._springs.combo);
+    orientations.add(ex._orientation);
   });
   data._springCombos = [...combos].sort();
+  data._orientations = [...orientations].sort((a, b) =>
+    (ORIENTATION_NAMES[a] || a).localeCompare(ORIENTATION_NAMES[b] || b)
+  );
 }
 
 function switchToFilter(filterType, value) {
   document.getElementById('filter-goals').value = '';
   document.getElementById('filter-muscles').value = '';
   document.getElementById('filter-position').value = '';
+  document.getElementById('filter-orientation').value = '';
   document.getElementById('filter-spring-combo').value = '';
   document.getElementById('exercise-search').value = '';
   searchQuery = '';
@@ -93,7 +122,8 @@ function switchToFilter(filterType, value) {
   const filterMap = {
     'goals': 'filter-goals',
     'muscleGroups': 'filter-muscles',
-    'startingPositions': 'filter-position'
+    'startingPositions': 'filter-position',
+    'orientation': 'filter-orientation'
   };
 
   const selectId = filterMap[filterType];
@@ -210,7 +240,18 @@ function rebuildFilters() {
   });
 
   if (currentMode === 'reformer') {
-    prepareSpringData();
+    prepareReformerData();
+
+    const orientationSelect = document.getElementById('filter-orientation');
+    while (orientationSelect.options.length > 1) orientationSelect.remove(1);
+    orientationSelect.value = '';
+    data._orientations.forEach(id => {
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = (ORIENTATION_NAMES[id] || id).toLowerCase();
+      orientationSelect.appendChild(option);
+    });
+
     const comboSelect = document.getElementById('filter-spring-combo');
     while (comboSelect.options.length > 1) comboSelect.remove(1);
     comboSelect.value = '';
@@ -228,7 +269,7 @@ function populateFilters() {
   rebuildFilters();
 
   // Add change listeners for selects
-  ['filter-goals', 'filter-muscles', 'filter-position', 'filter-spring-combo'].forEach(id => {
+  ['filter-goals', 'filter-muscles', 'filter-position', 'filter-orientation', 'filter-spring-combo'].forEach(id => {
     document.getElementById(id).addEventListener('change', applyFilters);
   });
 }
@@ -265,6 +306,10 @@ function applyFilters() {
   }
 
   if (currentMode === 'reformer') {
+    const orientationFilter = document.getElementById('filter-orientation').value;
+    if (orientationFilter) {
+      filtered = filtered.filter(ex => ex._orientation === orientationFilter);
+    }
     const comboFilter = document.getElementById('filter-spring-combo').value;
     if (selectedSpringColors.size > 0) {
       filtered = filtered.filter(ex =>
@@ -538,6 +583,12 @@ function showModal(ex) {
         <span class="meta-label">position</span>
         <div class="meta-tags"><button class="detail-tag" data-filter="startingPositions" data-value="${ex.startingPosition}">${positionName.toLowerCase()}</button></div>
       </div>
+      ${isReformer && ex._orientation ? `
+        <div class="meta-row">
+          <span class="meta-label">orientation</span>
+          <div class="meta-tags"><button class="detail-tag" data-filter="orientation" data-value="${ex._orientation}">${(ORIENTATION_NAMES[ex._orientation] || ex._orientation).toLowerCase()}</button></div>
+        </div>
+      ` : ''}
       <div class="meta-row">
         <span class="meta-label">goals</span>
         <div class="meta-tags">${goalTags || '<span class="detail-tag">none</span>'}</div>
@@ -707,6 +758,15 @@ function setupMobileSticky() {
       });
     }
 
+    const mobileOrientation = document.getElementById('mobile-filter-orientation');
+    if (mobileOrientation) {
+      mobileOrientation.addEventListener('change', () => {
+        document.getElementById('filter-orientation').value = mobileOrientation.value;
+        applyFilters();
+        updateFilterCount();
+      });
+    }
+
     const mobileViewBtns = filtersExpanded.querySelectorAll('.toggle-btn');
     mobileViewBtns.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -785,6 +845,7 @@ function setupMobileSticky() {
     if (positionFilter) count++;
     count += selectedContras.size;
     if (currentMode === 'reformer') {
+      if (document.getElementById('filter-orientation').value) count++;
       if (document.getElementById('filter-spring-combo').value) count++;
       count += selectedSpringColors.size;
     }
@@ -823,6 +884,8 @@ function setupMobileSticky() {
         if (mobileGoals) mobileGoals.value = document.getElementById('filter-goals').value;
         if (mobileMuscles) mobileMuscles.value = document.getElementById('filter-muscles').value;
         if (mobilePosition) mobilePosition.value = document.getElementById('filter-position').value;
+        const mobileOrientation = document.getElementById('mobile-filter-orientation');
+        if (mobileOrientation) mobileOrientation.value = document.getElementById('filter-orientation').value;
         const mobileSpringCombo = document.getElementById('mobile-filter-spring-combo');
         if (mobileSpringCombo) mobileSpringCombo.value = document.getElementById('filter-spring-combo').value;
         filtersExpanded.querySelectorAll('.spring-toggle').forEach(btn => {
@@ -872,7 +935,7 @@ function setupMobileSticky() {
   populateMobileFilters();
   updateFilterCount();
 
-  ['filter-goals', 'filter-muscles', 'filter-position', 'filter-spring-combo'].forEach(id => {
+  ['filter-goals', 'filter-muscles', 'filter-position', 'filter-orientation', 'filter-spring-combo'].forEach(id => {
     document.getElementById(id).addEventListener('change', updateFilterCount);
   });
 }
