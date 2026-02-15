@@ -930,12 +930,14 @@ function setupMobileSticky() {
   let filtersOpen = false;
 
   function updateStickyPadding() {
-    if (filtersOpen && sticky.classList.contains('visible')) {
+    if (!isMobile()) {
+      document.body.style.paddingTop = '';
+      return;
+    }
+    if (filtersOpen) {
       requestAnimationFrame(() => {
         document.body.style.paddingTop = sticky.offsetHeight + 'px';
       });
-    } else if (sticky.classList.contains('visible')) {
-      document.body.style.paddingTop = '70px';
     } else {
       document.body.style.paddingTop = '';
     }
@@ -1193,6 +1195,10 @@ function setupMobileSticky() {
     }
   }
 
+  function isMobile() {
+    return window.innerWidth <= 600;
+  }
+
   // Only bind these listeners once
   if (!sticky._bound) {
     mobileSearchInput.addEventListener('input', () => {
@@ -1249,39 +1255,6 @@ function setupMobileSticky() {
       updateStickyPadding();
     });
 
-    function isMobile() {
-      return window.innerWidth <= 600;
-    }
-
-    let ticking = false;
-    window.addEventListener('scroll', () => {
-      if (!ticking) {
-        requestAnimationFrame(() => {
-          if (!isMobile()) {
-            sticky.classList.remove('visible');
-            document.body.classList.remove('sticky-active');
-            ticking = false;
-            return;
-          }
-
-          const scrollY = window.scrollY;
-          const shouldShow = scrollY > stickyThreshold;
-
-          sticky.classList.toggle('visible', shouldShow);
-          document.body.classList.toggle('sticky-active', shouldShow);
-
-          if (!shouldShow && filtersOpen) {
-            filtersOpen = false;
-            filtersExpanded.classList.add('hidden');
-          }
-
-          updateStickyPadding();
-
-          ticking = false;
-        });
-        ticking = true;
-      }
-    });
 
     sticky._bound = true;
   }

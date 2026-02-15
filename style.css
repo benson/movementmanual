@@ -768,14 +768,14 @@ select:focus {
   display: none !important;
 }
 
-/* Mobile Sticky Bar - hidden on desktop */
+/* Mobile Sticky Bar - hidden on desktop, always visible on mobile */
 .mobile-sticky {
   display: none !important;
 }
 
 @media (max-width: 600px) {
   .mobile-sticky {
-    display: none !important;
+    display: block !important;
     position: fixed;
     top: 0;
     left: 0;
@@ -785,10 +785,6 @@ select:focus {
     padding: 12px 15px;
     border-bottom: 1px solid var(--border-light);
     box-shadow: 0 2px 8px var(--shadow);
-  }
-
-  .mobile-sticky.visible {
-    display: block !important;
   }
 
   .mobile-sticky-row {
@@ -917,20 +913,16 @@ select:focus {
     display: block !important;
   }
 
-  body.sticky-active {
-    padding-top: 70px;
-  }
 }
 
 /* Responsive */
 @media (max-width: 600px) {
   body {
-    padding: 20px 15px 80px;
+    padding: 70px 15px 80px;
   }
 
   .controls-row {
-    flex-direction: column;
-    gap: 20px;
+    display: none;
   }
 
   .filters {
