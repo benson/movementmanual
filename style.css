@@ -275,6 +275,48 @@ select:focus {
   background: var(--bg-alt);
 }
 
+/* Spring color toggles */
+.spring-color-toggles {
+  display: flex;
+  gap: 6px;
+}
+
+.spring-toggle {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--border-light);
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-transform: lowercase;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.spring-toggle.active {
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.spring-toggle:hover {
+  color: var(--text-muted);
+}
+
+.spring-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.spring-dot.red { background: #c0392b; }
+.spring-dot.yellow { background: #f1c40f; }
+.spring-dot.blue { background: #2980b9; }
+
 .selected-tags {
   display: none;
 }

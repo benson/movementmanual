@@ -3,6 +3,7 @@
 let data = null;
 let selectedContras = new Set();
 let searchQuery = '';
+let selectedSpringColors = new Set();
 let currentMode = localStorage.getItem('mode') || 'mat';
 
 // ============ Theme ============
@@ -47,12 +48,47 @@ function getTagName(category, id) {
   return data.tags[category]?.[id] || id;
 }
 
+function parseSpringTension(tension) {
+  if (!tension) return { colors: new Set(), combo: '' };
+  if (tension.toLowerCase().includes('all springs')) {
+    return { colors: new Set(['R', 'Y', 'B']), combo: 'all springs' };
+  }
+  let combo = tension;
+  const pipe = tension.indexOf('|');
+  if (pipe !== -1) combo = tension.substring(pipe + 1).trim();
+  combo = combo
+    .replace(/,?\s*(foundation|beginner)\s+springs?:?\s*.*/gi, '')
+    .replace(/\|.*$/i, '')
+    .replace(/^High:\s*/i, '')
+    .trim();
+  const colors = new Set();
+  if (/R/.test(combo)) colors.add('R');
+  if (/Y/.test(combo)) colors.add('Y');
+  if (/B/.test(combo)) colors.add('B');
+  return { colors, combo };
+}
+
+function prepareSpringData() {
+  if (currentMode !== 'reformer') return;
+  data.exercises.forEach(ex => {
+    ex._springs = parseSpringTension(ex.springTension);
+  });
+  const combos = new Set();
+  data.exercises.forEach(ex => {
+    if (ex._springs.combo) combos.add(ex._springs.combo);
+  });
+  data._springCombos = [...combos].sort();
+}
+
 function switchToFilter(filterType, value) {
   document.getElementById('filter-goals').value = '';
   document.getElementById('filter-muscles').value = '';
   document.getElementById('filter-position').value = '';
+  document.getElementById('filter-spring-combo').value = '';
   document.getElementById('exercise-search').value = '';
   searchQuery = '';
+  selectedSpringColors.clear();
+  document.querySelectorAll('.spring-toggle').forEach(b => b.classList.remove('active'));
 
   const filterMap = {
     'goals': 'filter-goals',
@@ -97,6 +133,7 @@ function setupModeToggle() {
 async function switchMode() {
   // Reset state
   selectedContras.clear();
+  selectedSpringColors.clear();
   searchQuery = '';
   document.getElementById('exercise-search').value = '';
   document.getElementById('mobile-search-input').value = '';
@@ -166,13 +203,32 @@ function rebuildFilters() {
 
   // Rebuild contra dropdown
   setupContraDropdown();
+
+  // Show/hide reformer-only filters
+  document.querySelectorAll('.reformer-only').forEach(el => {
+    el.classList.toggle('hidden', currentMode !== 'reformer');
+  });
+
+  if (currentMode === 'reformer') {
+    prepareSpringData();
+    const comboSelect = document.getElementById('filter-spring-combo');
+    while (comboSelect.options.length > 1) comboSelect.remove(1);
+    comboSelect.value = '';
+    data._springCombos.forEach(combo => {
+      const option = document.createElement('option');
+      option.value = combo;
+      option.textContent = combo.toLowerCase();
+      comboSelect.appendChild(option);
+    });
+    setupSpringColorToggles();
+  }
 }
 
 function populateFilters() {
   rebuildFilters();
 
   // Add change listeners for selects
-  ['filter-goals', 'filter-muscles', 'filter-position'].forEach(id => {
+  ['filter-goals', 'filter-muscles', 'filter-position', 'filter-spring-combo'].forEach(id => {
     document.getElementById(id).addEventListener('change', applyFilters);
   });
 }
@@ -206,6 +262,18 @@ function applyFilters() {
     filtered = filtered.filter(ex =>
       !ex.contraindications.some(c => selectedContras.has(c))
     );
+  }
+
+  if (currentMode === 'reformer') {
+    const comboFilter = document.getElementById('filter-spring-combo').value;
+    if (selectedSpringColors.size > 0) {
+      filtered = filtered.filter(ex =>
+        ex._springs && [...selectedSpringColors].every(c => ex._springs.colors.has(c))
+      );
+    }
+    if (comboFilter) {
+      filtered = filtered.filter(ex => ex._springs?.combo === comboFilter);
+    }
   }
 
   renderBrowseGrid(filtered);
@@ -277,6 +345,27 @@ function setupContraDropdown() {
       label.textContent = `${selectedContras.size} selected`;
     }
   }
+}
+
+function setupSpringColorToggles() {
+  const group = document.getElementById('spring-color-group');
+  if (!group) return;
+  group.querySelectorAll('.spring-toggle').forEach(btn => {
+    btn.classList.remove('active');
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    newBtn.addEventListener('click', () => {
+      const color = newBtn.dataset.color;
+      if (selectedSpringColors.has(color)) {
+        selectedSpringColors.delete(color);
+        newBtn.classList.remove('active');
+      } else {
+        selectedSpringColors.add(color);
+        newBtn.classList.add('active');
+      }
+      applyFilters();
+    });
+  });
 }
 
 function renderBrowseGrid(exercises) {
@@ -654,6 +743,35 @@ function setupMobileSticky() {
         });
       });
     }
+
+    // Spring combo
+    const mobileSpringCombo = document.getElementById('mobile-filter-spring-combo');
+    if (mobileSpringCombo) {
+      mobileSpringCombo.addEventListener('change', () => {
+        document.getElementById('filter-spring-combo').value = mobileSpringCombo.value;
+        applyFilters();
+        updateFilterCount();
+      });
+    }
+
+    // Spring color toggles
+    filtersExpanded.querySelectorAll('.spring-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const color = btn.dataset.color;
+        const mainBtn = document.querySelector(`#spring-color-group .spring-toggle[data-color="${color}"]`);
+        if (selectedSpringColors.has(color)) {
+          selectedSpringColors.delete(color);
+          btn.classList.remove('active');
+          if (mainBtn) mainBtn.classList.remove('active');
+        } else {
+          selectedSpringColors.add(color);
+          btn.classList.add('active');
+          if (mainBtn) mainBtn.classList.add('active');
+        }
+        applyFilters();
+        updateFilterCount();
+      });
+    });
   }
 
   function updateFilterCount() {
@@ -666,6 +784,10 @@ function setupMobileSticky() {
     if (muscleFilter) count++;
     if (positionFilter) count++;
     count += selectedContras.size;
+    if (currentMode === 'reformer') {
+      if (document.getElementById('filter-spring-combo').value) count++;
+      count += selectedSpringColors.size;
+    }
 
     if (count > 0) {
       filterCountSpan.textContent = `(${count})`;
@@ -701,6 +823,11 @@ function setupMobileSticky() {
         if (mobileGoals) mobileGoals.value = document.getElementById('filter-goals').value;
         if (mobileMuscles) mobileMuscles.value = document.getElementById('filter-muscles').value;
         if (mobilePosition) mobilePosition.value = document.getElementById('filter-position').value;
+        const mobileSpringCombo = document.getElementById('mobile-filter-spring-combo');
+        if (mobileSpringCombo) mobileSpringCombo.value = document.getElementById('filter-spring-combo').value;
+        filtersExpanded.querySelectorAll('.spring-toggle').forEach(btn => {
+          btn.classList.toggle('active', selectedSpringColors.has(btn.dataset.color));
+        });
       }
     });
 
@@ -745,7 +872,7 @@ function setupMobileSticky() {
   populateMobileFilters();
   updateFilterCount();
 
-  ['filter-goals', 'filter-muscles', 'filter-position'].forEach(id => {
+  ['filter-goals', 'filter-muscles', 'filter-position', 'filter-spring-combo'].forEach(id => {
     document.getElementById(id).addEventListener('change', updateFilterCount);
   });
 }
