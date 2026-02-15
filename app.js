@@ -929,6 +929,18 @@ function setupMobileSticky() {
   let stickyThreshold = 0;
   let filtersOpen = false;
 
+  function updateStickyPadding() {
+    if (filtersOpen && sticky.classList.contains('visible')) {
+      requestAnimationFrame(() => {
+        document.body.style.paddingTop = sticky.offsetHeight + 'px';
+      });
+    } else if (sticky.classList.contains('visible')) {
+      document.body.style.paddingTop = '70px';
+    } else {
+      document.body.style.paddingTop = '';
+    }
+  }
+
   function updateThreshold() {
     const header = document.querySelector('header');
     stickyThreshold = header.offsetTop + header.offsetHeight + 20;
@@ -939,21 +951,83 @@ function setupMobileSticky() {
     const viewToggle = document.querySelector('.view-toggle');
 
     filtersExpanded.innerHTML = '';
+
+    // Build compact chip row
+    const chipRow = document.createElement('div');
+    chipRow.className = 'mobile-chip-row';
+
+    const panels = [];
+
     filters.querySelectorAll('.filter-group').forEach(group => {
       if (group.querySelector('#exercise-search')) return;
+      // Skip hidden reformer-only filters when in mat mode
+      if (group.classList.contains('hidden') && group.classList.contains('reformer-only')) return;
+
+      const label = group.querySelector('label');
+      const name = label ? label.textContent.trim() : 'filter';
+
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'mobile-filter-chip';
+      chip.textContent = name;
+      chip.dataset.panelIndex = panels.length;
+
+      const panel = document.createElement('div');
+      panel.className = 'mobile-filter-panel hidden';
 
       const clone = group.cloneNode(true);
+      clone.classList.remove('hidden', 'reformer-only');
+      // Remove the label from the clone since the chip serves as the label
+      const cloneLabel = clone.querySelector('label');
+      if (cloneLabel) cloneLabel.remove();
       clone.querySelectorAll('[id]').forEach(el => {
         el.id = 'mobile-' + el.id;
       });
-      filtersExpanded.appendChild(clone);
+      panel.appendChild(clone);
+      panels.push({ chip, panel });
+
+      chipRow.appendChild(chip);
     });
 
+    // View toggle chip
+    const viewChip = document.createElement('button');
+    viewChip.type = 'button';
+    viewChip.className = 'mobile-filter-chip';
+    viewChip.textContent = 'view';
+    viewChip.dataset.panelIndex = panels.length;
+
+    const viewPanel = document.createElement('div');
+    viewPanel.className = 'mobile-filter-panel hidden';
     const viewClone = viewToggle.cloneNode(true);
+    const viewLabel = viewClone.querySelector('label');
+    if (viewLabel) viewLabel.remove();
     viewClone.querySelectorAll('[id]').forEach(el => {
       el.id = 'mobile-' + el.id;
     });
-    filtersExpanded.appendChild(viewClone);
+    viewPanel.appendChild(viewClone);
+    panels.push({ chip: viewChip, panel: viewPanel });
+    chipRow.appendChild(viewChip);
+
+    filtersExpanded.appendChild(chipRow);
+    panels.forEach(p => filtersExpanded.appendChild(p.panel));
+
+    // Chip toggle behavior — one panel at a time
+    panels.forEach((p, i) => {
+      p.chip.addEventListener('click', () => {
+        const wasOpen = p.chip.classList.contains('active');
+        // Close all
+        panels.forEach(q => {
+          q.chip.classList.remove('active');
+          q.panel.classList.add('hidden');
+        });
+        // Toggle this one
+        if (!wasOpen) {
+          p.chip.classList.add('active');
+          p.panel.classList.remove('hidden');
+        }
+        updateStickyPadding();
+      });
+    });
 
     setupMobileFilterListeners();
   }
@@ -1134,7 +1208,6 @@ function setupMobileSticky() {
     filterToggle.addEventListener('click', () => {
       filtersOpen = !filtersOpen;
       filtersExpanded.classList.toggle('hidden', !filtersOpen);
-      document.body.classList.toggle('filters-expanded', filtersOpen);
 
       if (filtersOpen) {
         const mobilePosition = document.getElementById('mobile-filter-position');
@@ -1173,6 +1246,7 @@ function setupMobileSticky() {
           btn.classList.toggle('active', selectedSpringColors.has(btn.dataset.color));
         });
       }
+      updateStickyPadding();
     });
 
     function isMobile() {
@@ -1199,8 +1273,9 @@ function setupMobileSticky() {
           if (!shouldShow && filtersOpen) {
             filtersOpen = false;
             filtersExpanded.classList.add('hidden');
-            document.body.classList.remove('filters-expanded');
           }
+
+          updateStickyPadding();
 
           ticking = false;
         });
