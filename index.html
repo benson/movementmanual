@@ -13,7 +13,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="https://bensonperry.com/shared/common.css">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
   <div class="container">
@@ -91,9 +91,14 @@
 
         <div class="filter-group reformer-only hidden" id="spring-combo-group">
           <label>spring combo</label>
-          <select id="filter-spring-combo">
-            <option value="">all combos</option>
-          </select>
+          <div class="multi-select-wrapper">
+            <button type="button" id="spring-combo-toggle" class="multi-select-toggle">
+              <span id="spring-combo-label">none selected</span>
+            </button>
+            <div id="spring-combo-dropdown" class="multi-select-dropdown hidden">
+              <div id="spring-combo-options"></div>
+            </div>
+          </div>
         </div>
 
         <div class="filter-group">
@@ -137,6 +142,6 @@
 
   <footer>made by <a href="https://bensonperry.com">benson</a></footer>
 
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

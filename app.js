@@ -4,6 +4,7 @@ let data = null;
 let selectedContras = new Set();
 let searchQuery = '';
 let selectedSpringColors = new Set();
+let selectedSpringCombos = new Set();
 let currentMode = localStorage.getItem('mode') || 'mat';
 
 // ============ Theme ============
@@ -113,10 +114,11 @@ function switchToFilter(filterType, value) {
   document.getElementById('filter-muscles').value = '';
   document.getElementById('filter-position').value = '';
   document.getElementById('filter-orientation').value = '';
-  document.getElementById('filter-spring-combo').value = '';
   document.getElementById('exercise-search').value = '';
   searchQuery = '';
   selectedSpringColors.clear();
+  selectedSpringCombos.clear();
+  updateSpringComboDisplay();
   document.querySelectorAll('.spring-toggle').forEach(b => b.classList.remove('active'));
 
   const filterMap = {
@@ -164,6 +166,7 @@ async function switchMode() {
   // Reset state
   selectedContras.clear();
   selectedSpringColors.clear();
+  selectedSpringCombos.clear();
   searchQuery = '';
   document.getElementById('exercise-search').value = '';
   document.getElementById('mobile-search-input').value = '';
@@ -252,15 +255,7 @@ function rebuildFilters() {
       orientationSelect.appendChild(option);
     });
 
-    const comboSelect = document.getElementById('filter-spring-combo');
-    while (comboSelect.options.length > 1) comboSelect.remove(1);
-    comboSelect.value = '';
-    data._springCombos.forEach(combo => {
-      const option = document.createElement('option');
-      option.value = combo;
-      option.textContent = combo.toLowerCase();
-      comboSelect.appendChild(option);
-    });
+    setupSpringComboDropdown();
     setupSpringColorToggles();
   }
 }
@@ -269,7 +264,7 @@ function populateFilters() {
   rebuildFilters();
 
   // Add change listeners for selects
-  ['filter-goals', 'filter-muscles', 'filter-position', 'filter-orientation', 'filter-spring-combo'].forEach(id => {
+  ['filter-goals', 'filter-muscles', 'filter-position', 'filter-orientation'].forEach(id => {
     document.getElementById(id).addEventListener('change', applyFilters);
   });
 }
@@ -310,14 +305,13 @@ function applyFilters() {
     if (orientationFilter) {
       filtered = filtered.filter(ex => ex._orientation === orientationFilter);
     }
-    const comboFilter = document.getElementById('filter-spring-combo').value;
     if (selectedSpringColors.size > 0) {
       filtered = filtered.filter(ex =>
         ex._springs && [...selectedSpringColors].every(c => ex._springs.colors.has(c))
       );
     }
-    if (comboFilter) {
-      filtered = filtered.filter(ex => ex._springs?.combo === comboFilter);
+    if (selectedSpringCombos.size > 0) {
+      filtered = filtered.filter(ex => ex._springs && selectedSpringCombos.has(ex._springs.combo));
     }
   }
 
@@ -369,7 +363,7 @@ function setupContraDropdown() {
     });
 
     document.addEventListener('click', (e) => {
-      if (!e.target.closest('.multi-select-wrapper')) {
+      if (!toggle.contains(e.target) && !dropdown.contains(e.target)) {
         dropdown.classList.add('hidden');
       }
     });
@@ -389,6 +383,75 @@ function setupContraDropdown() {
     } else {
       label.textContent = `${selectedContras.size} selected`;
     }
+  }
+}
+
+function setupSpringComboDropdown() {
+  const toggle = document.getElementById('spring-combo-toggle');
+  const dropdown = document.getElementById('spring-combo-dropdown');
+  const options = document.getElementById('spring-combo-options');
+  const label = document.getElementById('spring-combo-label');
+
+  selectedSpringCombos.clear();
+  options.innerHTML = '';
+
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.className = 'multi-select-clear';
+  clearBtn.textContent = 'clear all';
+  clearBtn.addEventListener('click', () => {
+    selectedSpringCombos.clear();
+    options.querySelectorAll('input').forEach(cb => cb.checked = false);
+    updateSpringComboDisplay();
+    applyFilters();
+  });
+  options.appendChild(clearBtn);
+
+  data._springCombos.forEach(combo => {
+    const option = document.createElement('label');
+    option.className = 'multi-select-option';
+    option.innerHTML = `
+      <input type="checkbox" value="${combo}">
+      ${combo.toLowerCase()}
+    `;
+    options.appendChild(option);
+
+    option.querySelector('input').addEventListener('change', (e) => {
+      if (e.target.checked) {
+        selectedSpringCombos.add(combo);
+      } else {
+        selectedSpringCombos.delete(combo);
+      }
+      updateSpringComboDisplay();
+      applyFilters();
+    });
+  });
+
+  if (!toggle._bound) {
+    toggle.addEventListener('click', () => {
+      dropdown.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!toggle.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+    toggle._bound = true;
+  }
+
+  label.textContent = 'none selected';
+}
+
+function updateSpringComboDisplay() {
+  const label = document.getElementById('spring-combo-label');
+  if (!label) return;
+  if (selectedSpringCombos.size === 0) {
+    label.textContent = 'none selected';
+  } else if (selectedSpringCombos.size <= 2) {
+    label.textContent = [...selectedSpringCombos].join(', ').toLowerCase();
+  } else {
+    label.textContent = `${selectedSpringCombos.size} selected`;
   }
 }
 
@@ -845,13 +908,24 @@ function setupMobileSticky() {
       });
     }
 
-    // Spring combo
-    const mobileSpringCombo = document.getElementById('mobile-filter-spring-combo');
-    if (mobileSpringCombo) {
-      mobileSpringCombo.addEventListener('change', () => {
-        document.getElementById('filter-spring-combo').value = mobileSpringCombo.value;
-        applyFilters();
-        updateFilterCount();
+    // Spring combo multi-select
+    const mobileSpringComboToggle = document.getElementById('mobile-spring-combo-toggle');
+    const mobileSpringComboDropdown = document.getElementById('mobile-spring-combo-dropdown');
+    if (mobileSpringComboToggle && mobileSpringComboDropdown) {
+      mobileSpringComboToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        mobileSpringComboDropdown.classList.toggle('hidden');
+      });
+
+      mobileSpringComboDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const mainCb = document.querySelector(`#spring-combo-options input[value="${cb.value}"]`);
+          if (mainCb) {
+            mainCb.checked = cb.checked;
+            mainCb.dispatchEvent(new Event('change'));
+          }
+          updateFilterCount();
+        });
       });
     }
 
@@ -887,7 +961,7 @@ function setupMobileSticky() {
     count += selectedContras.size;
     if (currentMode === 'reformer') {
       if (document.getElementById('filter-orientation').value) count++;
-      if (document.getElementById('filter-spring-combo').value) count++;
+      count += selectedSpringCombos.size;
       count += selectedSpringColors.size;
     }
 
@@ -927,8 +1001,15 @@ function setupMobileSticky() {
         if (mobilePosition) mobilePosition.value = document.getElementById('filter-position').value;
         const mobileOrientation = document.getElementById('mobile-filter-orientation');
         if (mobileOrientation) mobileOrientation.value = document.getElementById('filter-orientation').value;
-        const mobileSpringCombo = document.getElementById('mobile-filter-spring-combo');
-        if (mobileSpringCombo) mobileSpringCombo.value = document.getElementById('filter-spring-combo').value;
+        // Sync spring combo checkboxes
+        filtersExpanded.querySelectorAll('#mobile-spring-combo-options input[type="checkbox"]').forEach(cb => {
+          cb.checked = selectedSpringCombos.has(cb.value);
+        });
+        const mobileComboLabel = document.getElementById('mobile-spring-combo-label');
+        if (mobileComboLabel) {
+          const label = document.getElementById('spring-combo-label');
+          if (label) mobileComboLabel.textContent = label.textContent;
+        }
         filtersExpanded.querySelectorAll('.spring-toggle').forEach(btn => {
           btn.classList.toggle('active', selectedSpringColors.has(btn.dataset.color));
         });
@@ -976,7 +1057,7 @@ function setupMobileSticky() {
   populateMobileFilters();
   updateFilterCount();
 
-  ['filter-goals', 'filter-muscles', 'filter-position', 'filter-orientation', 'filter-spring-combo'].forEach(id => {
+  ['filter-goals', 'filter-muscles', 'filter-position', 'filter-orientation'].forEach(id => {
     document.getElementById(id).addEventListener('change', updateFilterCount);
   });
 }
