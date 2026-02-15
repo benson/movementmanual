@@ -1,6 +1,8 @@
 // Movement Manual App
 
 let data = null;
+let selectedGoals = new Set();
+let selectedMuscles = new Set();
 let selectedContras = new Set();
 let searchQuery = '';
 let selectedSpringColors = new Set();
@@ -110,27 +112,33 @@ function prepareReformerData() {
 }
 
 function switchToFilter(filterType, value) {
-  document.getElementById('filter-goals').value = '';
-  document.getElementById('filter-muscles').value = '';
+  selectedGoals.clear();
+  selectedMuscles.clear();
   document.getElementById('filter-position').value = '';
   document.getElementById('filter-orientation').value = '';
   document.getElementById('exercise-search').value = '';
   searchQuery = '';
   selectedSpringColors.clear();
   selectedSpringCombos.clear();
+  updateGoalsDisplay();
+  updateMusclesDisplay();
   updateSpringComboDisplay();
   document.querySelectorAll('.spring-toggle').forEach(b => b.classList.remove('active'));
 
-  const filterMap = {
-    'goals': 'filter-goals',
-    'muscleGroups': 'filter-muscles',
-    'startingPositions': 'filter-position',
-    'orientation': 'filter-orientation'
-  };
-
-  const selectId = filterMap[filterType];
-  if (selectId) {
-    document.getElementById(selectId).value = value;
+  if (filterType === 'goals') {
+    selectedGoals.add(value);
+    updateGoalsDisplay();
+    const cb = document.querySelector(`#goals-options input[value="${value}"]`);
+    if (cb) cb.checked = true;
+  } else if (filterType === 'muscleGroups') {
+    selectedMuscles.add(value);
+    updateMusclesDisplay();
+    const cb = document.querySelector(`#muscles-options input[value="${value}"]`);
+    if (cb) cb.checked = true;
+  } else if (filterType === 'startingPositions') {
+    document.getElementById('filter-position').value = value;
+  } else if (filterType === 'orientation') {
+    document.getElementById('filter-orientation').value = value;
   }
 
   hideModal();
@@ -164,6 +172,8 @@ function setupModeToggle() {
 
 async function switchMode() {
   // Reset state
+  selectedGoals.clear();
+  selectedMuscles.clear();
   selectedContras.clear();
   selectedSpringColors.clear();
   selectedSpringCombos.clear();
@@ -200,32 +210,10 @@ function setupViewToggle() {
 // ============ Browse Mode (Filter-First) ============
 
 function rebuildFilters() {
-  const goalsSelect = document.getElementById('filter-goals');
-  const musclesSelect = document.getElementById('filter-muscles');
   const positionSelect = document.getElementById('filter-position');
-  const contraOptions = document.getElementById('contra-options');
 
-  // Clear existing options (keep first "all" option)
-  [goalsSelect, musclesSelect, positionSelect].forEach(select => {
-    while (select.options.length > 1) select.remove(1);
-    select.value = '';
-  });
-  contraOptions.innerHTML = '';
-
-  // Repopulate
-  Object.entries(data.tags.goals).forEach(([id, name]) => {
-    const option = document.createElement('option');
-    option.value = id;
-    option.textContent = name.toLowerCase();
-    goalsSelect.appendChild(option);
-  });
-
-  Object.entries(data.tags.muscleGroups).forEach(([id, name]) => {
-    const option = document.createElement('option');
-    option.value = id;
-    option.textContent = name.toLowerCase();
-    musclesSelect.appendChild(option);
-  });
+  while (positionSelect.options.length > 1) positionSelect.remove(1);
+  positionSelect.value = '';
 
   Object.entries(data.tags.startingPositions).forEach(([id, name]) => {
     const option = document.createElement('option');
@@ -234,7 +222,8 @@ function rebuildFilters() {
     positionSelect.appendChild(option);
   });
 
-  // Rebuild contra dropdown
+  setupGoalsDropdown();
+  setupMusclesDropdown();
   setupContraDropdown();
 
   // Show/hide reformer-only filters
@@ -264,14 +253,12 @@ function populateFilters() {
   rebuildFilters();
 
   // Add change listeners for selects
-  ['filter-goals', 'filter-muscles', 'filter-position', 'filter-orientation'].forEach(id => {
+  ['filter-position', 'filter-orientation'].forEach(id => {
     document.getElementById(id).addEventListener('change', applyFilters);
   });
 }
 
 function applyFilters() {
-  const goalFilter = document.getElementById('filter-goals').value;
-  const muscleFilter = document.getElementById('filter-muscles').value;
   const positionFilter = document.getElementById('filter-position').value;
 
   let filtered = data.exercises;
@@ -282,12 +269,12 @@ function applyFilters() {
     );
   }
 
-  if (goalFilter) {
-    filtered = filtered.filter(ex => ex.goals.includes(goalFilter));
+  if (selectedGoals.size > 0) {
+    filtered = filtered.filter(ex => ex.goals.some(g => selectedGoals.has(g)));
   }
 
-  if (muscleFilter) {
-    filtered = filtered.filter(ex => ex.muscleGroups.includes(muscleFilter));
+  if (selectedMuscles.size > 0) {
+    filtered = filtered.filter(ex => ex.muscleGroups.some(m => selectedMuscles.has(m)));
   }
 
   if (positionFilter) {
@@ -316,6 +303,144 @@ function applyFilters() {
   }
 
   renderBrowseGrid(filtered);
+}
+
+function setupGoalsDropdown() {
+  const toggle = document.getElementById('goals-toggle');
+  const dropdown = document.getElementById('goals-dropdown');
+  const options = document.getElementById('goals-options');
+  const label = document.getElementById('goals-label');
+
+  selectedGoals.clear();
+  options.innerHTML = '';
+
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.className = 'multi-select-clear';
+  clearBtn.textContent = 'clear all';
+  clearBtn.addEventListener('click', () => {
+    selectedGoals.clear();
+    options.querySelectorAll('input').forEach(cb => cb.checked = false);
+    updateGoalsDisplay();
+    applyFilters();
+  });
+  options.appendChild(clearBtn);
+
+  Object.entries(data.tags.goals).forEach(([id, name]) => {
+    const option = document.createElement('label');
+    option.className = 'multi-select-option';
+    option.innerHTML = `
+      <input type="checkbox" value="${id}">
+      ${name.toLowerCase()}
+    `;
+    options.appendChild(option);
+
+    option.querySelector('input').addEventListener('change', (e) => {
+      if (e.target.checked) {
+        selectedGoals.add(id);
+      } else {
+        selectedGoals.delete(id);
+      }
+      updateGoalsDisplay();
+      applyFilters();
+    });
+  });
+
+  if (!toggle._bound) {
+    toggle.addEventListener('click', () => {
+      dropdown.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!toggle.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+    toggle._bound = true;
+  }
+
+  label.textContent = 'none selected';
+}
+
+function updateGoalsDisplay() {
+  const label = document.getElementById('goals-label');
+  if (!label) return;
+  if (selectedGoals.size === 0) {
+    label.textContent = 'none selected';
+  } else if (selectedGoals.size <= 2) {
+    label.textContent = [...selectedGoals].map(id => data.tags.goals[id].toLowerCase()).join(', ');
+  } else {
+    label.textContent = `${selectedGoals.size} selected`;
+  }
+}
+
+function setupMusclesDropdown() {
+  const toggle = document.getElementById('muscles-toggle');
+  const dropdown = document.getElementById('muscles-dropdown');
+  const options = document.getElementById('muscles-options');
+  const label = document.getElementById('muscles-label');
+
+  selectedMuscles.clear();
+  options.innerHTML = '';
+
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.className = 'multi-select-clear';
+  clearBtn.textContent = 'clear all';
+  clearBtn.addEventListener('click', () => {
+    selectedMuscles.clear();
+    options.querySelectorAll('input').forEach(cb => cb.checked = false);
+    updateMusclesDisplay();
+    applyFilters();
+  });
+  options.appendChild(clearBtn);
+
+  Object.entries(data.tags.muscleGroups).forEach(([id, name]) => {
+    const option = document.createElement('label');
+    option.className = 'multi-select-option';
+    option.innerHTML = `
+      <input type="checkbox" value="${id}">
+      ${name.toLowerCase()}
+    `;
+    options.appendChild(option);
+
+    option.querySelector('input').addEventListener('change', (e) => {
+      if (e.target.checked) {
+        selectedMuscles.add(id);
+      } else {
+        selectedMuscles.delete(id);
+      }
+      updateMusclesDisplay();
+      applyFilters();
+    });
+  });
+
+  if (!toggle._bound) {
+    toggle.addEventListener('click', () => {
+      dropdown.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!toggle.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+    toggle._bound = true;
+  }
+
+  label.textContent = 'none selected';
+}
+
+function updateMusclesDisplay() {
+  const label = document.getElementById('muscles-label');
+  if (!label) return;
+  if (selectedMuscles.size === 0) {
+    label.textContent = 'none selected';
+  } else if (selectedMuscles.size <= 2) {
+    label.textContent = [...selectedMuscles].map(id => data.tags.muscleGroups[id].toLowerCase()).join(', ');
+  } else {
+    label.textContent = `${selectedMuscles.size} selected`;
+  }
 }
 
 function setupContraDropdown() {
@@ -834,23 +959,45 @@ function setupMobileSticky() {
   }
 
   function setupMobileFilterListeners() {
-    const mobileGoals = document.getElementById('mobile-filter-goals');
-    const mobileMusles = document.getElementById('mobile-filter-muscles');
     const mobilePosition = document.getElementById('mobile-filter-position');
 
-    if (mobileGoals) {
-      mobileGoals.addEventListener('change', () => {
-        document.getElementById('filter-goals').value = mobileGoals.value;
-        applyFilters();
-        updateFilterCount();
+    // Goals multi-select
+    const mobileGoalsToggle = document.getElementById('mobile-goals-toggle');
+    const mobileGoalsDropdown = document.getElementById('mobile-goals-dropdown');
+    if (mobileGoalsToggle && mobileGoalsDropdown) {
+      mobileGoalsToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        mobileGoalsDropdown.classList.toggle('hidden');
+      });
+      mobileGoalsDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const mainCb = document.querySelector(`#goals-options input[value="${cb.value}"]`);
+          if (mainCb) {
+            mainCb.checked = cb.checked;
+            mainCb.dispatchEvent(new Event('change'));
+          }
+          updateFilterCount();
+        });
       });
     }
 
-    if (mobileMusles) {
-      mobileMusles.addEventListener('change', () => {
-        document.getElementById('filter-muscles').value = mobileMusles.value;
-        applyFilters();
-        updateFilterCount();
+    // Muscles multi-select
+    const mobileMusclesToggle = document.getElementById('mobile-muscles-toggle');
+    const mobileMusclesDropdown = document.getElementById('mobile-muscles-dropdown');
+    if (mobileMusclesToggle && mobileMusclesDropdown) {
+      mobileMusclesToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        mobileMusclesDropdown.classList.toggle('hidden');
+      });
+      mobileMusclesDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const mainCb = document.querySelector(`#muscles-options input[value="${cb.value}"]`);
+          if (mainCb) {
+            mainCb.checked = cb.checked;
+            mainCb.dispatchEvent(new Event('change'));
+          }
+          updateFilterCount();
+        });
       });
     }
 
@@ -950,13 +1097,11 @@ function setupMobileSticky() {
   }
 
   function updateFilterCount() {
-    const goalFilter = document.getElementById('filter-goals').value;
-    const muscleFilter = document.getElementById('filter-muscles').value;
     const positionFilter = document.getElementById('filter-position').value;
 
     let count = 0;
-    if (goalFilter) count++;
-    if (muscleFilter) count++;
+    count += selectedGoals.size;
+    count += selectedMuscles.size;
     if (positionFilter) count++;
     count += selectedContras.size;
     if (currentMode === 'reformer') {
@@ -992,13 +1137,27 @@ function setupMobileSticky() {
       document.body.classList.toggle('filters-expanded', filtersOpen);
 
       if (filtersOpen) {
-        const mobileGoals = document.getElementById('mobile-filter-goals');
-        const mobileMuscles = document.getElementById('mobile-filter-muscles');
         const mobilePosition = document.getElementById('mobile-filter-position');
-
-        if (mobileGoals) mobileGoals.value = document.getElementById('filter-goals').value;
-        if (mobileMuscles) mobileMuscles.value = document.getElementById('filter-muscles').value;
         if (mobilePosition) mobilePosition.value = document.getElementById('filter-position').value;
+
+        // Sync goals checkboxes
+        filtersExpanded.querySelectorAll('#mobile-goals-options input[type="checkbox"]').forEach(cb => {
+          cb.checked = selectedGoals.has(cb.value);
+        });
+        const mobileGoalsLabel = document.getElementById('mobile-goals-label');
+        if (mobileGoalsLabel) {
+          const gl = document.getElementById('goals-label');
+          if (gl) mobileGoalsLabel.textContent = gl.textContent;
+        }
+        // Sync muscles checkboxes
+        filtersExpanded.querySelectorAll('#mobile-muscles-options input[type="checkbox"]').forEach(cb => {
+          cb.checked = selectedMuscles.has(cb.value);
+        });
+        const mobileMusclesLabel = document.getElementById('mobile-muscles-label');
+        if (mobileMusclesLabel) {
+          const ml = document.getElementById('muscles-label');
+          if (ml) mobileMusclesLabel.textContent = ml.textContent;
+        }
         const mobileOrientation = document.getElementById('mobile-filter-orientation');
         if (mobileOrientation) mobileOrientation.value = document.getElementById('filter-orientation').value;
         // Sync spring combo checkboxes
@@ -1057,7 +1216,7 @@ function setupMobileSticky() {
   populateMobileFilters();
   updateFilterCount();
 
-  ['filter-goals', 'filter-muscles', 'filter-position', 'filter-orientation'].forEach(id => {
+  ['filter-position', 'filter-orientation'].forEach(id => {
     document.getElementById(id).addEventListener('change', updateFilterCount);
   });
 }

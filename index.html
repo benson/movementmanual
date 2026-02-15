@@ -13,7 +13,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="https://bensonperry.com/shared/common.css">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
   <div class="container">
@@ -54,16 +54,26 @@
 
         <div class="filter-group">
           <label>goals</label>
-          <select id="filter-goals">
-            <option value="">all goals</option>
-          </select>
+          <div class="multi-select-wrapper">
+            <button type="button" id="goals-toggle" class="multi-select-toggle">
+              <span id="goals-label">none selected</span>
+            </button>
+            <div id="goals-dropdown" class="multi-select-dropdown hidden">
+              <div id="goals-options"></div>
+            </div>
+          </div>
         </div>
 
         <div class="filter-group">
           <label>muscle group</label>
-          <select id="filter-muscles">
-            <option value="">all muscle groups</option>
-          </select>
+          <div class="multi-select-wrapper">
+            <button type="button" id="muscles-toggle" class="multi-select-toggle">
+              <span id="muscles-label">none selected</span>
+            </button>
+            <div id="muscles-dropdown" class="multi-select-dropdown hidden">
+              <div id="muscles-options"></div>
+            </div>
+          </div>
         </div>
 
         <div class="filter-group">
@@ -142,6 +152,6 @@
 
   <footer>made by <a href="https://bensonperry.com">benson</a></footer>
 
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
