@@ -435,18 +435,18 @@ function expandSprings(notation) {
 function springDotsHTML(combo) {
   if (!combo) return '';
   const colorClass = { R: 'red', Y: 'yellow', B: 'blue' };
+  const makeDots = springs => springs.map(c => `<span class="s-dot ${colorClass[c]}"></span>`).join('');
   if (combo === 'all springs') {
-    return '<div class="spring-dots"><span class="s-dot red"></span><span class="s-dot blue"></span><span class="s-dot yellow"></span></div>';
+    return `<div class="spring-dots-right">${makeDots(['R', 'B', 'Y'])}</div>`;
   }
   const parts = combo.split(' - ');
   const left = expandSprings(parts[0]);
   const right = parts[1] ? expandSprings(parts[1]) : [];
-  let html = left.map(c => `<span class="s-dot ${colorClass[c]}"></span>`).join('');
+  let html = `<div class="spring-dots-left">${makeDots(left)}</div>`;
   if (right.length) {
-    html += '<span class="s-dot-sep">\u2013</span>';
-    html += right.map(c => `<span class="s-dot ${colorClass[c]}"></span>`).join('');
+    html += `<div class="spring-dots-right">${makeDots(right)}</div>`;
   }
-  return `<div class="spring-dots">${html}</div>`;
+  return html;
 }
 
 function renderBrowseGrid(exercises) {
