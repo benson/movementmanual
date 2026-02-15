@@ -413,6 +413,42 @@ function setupSpringColorToggles() {
   });
 }
 
+function expandSprings(notation) {
+  const result = [];
+  let i = 0;
+  while (i < notation.length) {
+    let count = 1;
+    if (/\d/.test(notation[i])) {
+      count = parseInt(notation[i]);
+      i++;
+    }
+    if (i < notation.length && /[RYB]/.test(notation[i])) {
+      for (let j = 0; j < count; j++) result.push(notation[i]);
+      i++;
+    } else {
+      i++;
+    }
+  }
+  return result;
+}
+
+function springDotsHTML(combo) {
+  if (!combo) return '';
+  const colorClass = { R: 'red', Y: 'yellow', B: 'blue' };
+  if (combo === 'all springs') {
+    return '<div class="spring-dots"><span class="s-dot red"></span><span class="s-dot blue"></span><span class="s-dot yellow"></span></div>';
+  }
+  const parts = combo.split(' - ');
+  const left = expandSprings(parts[0]);
+  const right = parts[1] ? expandSprings(parts[1]) : [];
+  let html = left.map(c => `<span class="s-dot ${colorClass[c]}"></span>`).join('');
+  if (right.length) {
+    html += '<span class="s-dot-sep">\u2013</span>';
+    html += right.map(c => `<span class="s-dot ${colorClass[c]}"></span>`).join('');
+  }
+  return `<div class="spring-dots">${html}</div>`;
+}
+
 function renderBrowseGrid(exercises) {
   const grid = document.getElementById('browse-grid');
   const countEl = document.getElementById('browse-count');
@@ -430,9 +466,14 @@ function renderBrowseGrid(exercises) {
       `<span class="tag">${getTagName('goals', g).toLowerCase()}</span>`
     ).join('');
 
+    const dots = (currentMode === 'reformer' && ex._springs) ? springDotsHTML(ex._springs.combo) : '';
+
     return `
       <div class="exercise-card" data-id="${ex.id}">
-        ${imageSrc ? `<img class="card-image" src="${imageSrc}" alt="${ex.name}" loading="lazy">` : '<div class="card-image"></div>'}
+        <div class="card-image-wrap">
+          ${imageSrc ? `<img class="card-image" src="${imageSrc}" alt="${ex.name}" loading="lazy">` : '<div class="card-image"></div>'}
+          ${dots}
+        </div>
         <div class="card-info">
           <div class="card-name">${ex.name.toLowerCase()}</div>
           <div class="card-tags">${goalTags}</div>
